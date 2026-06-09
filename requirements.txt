@@ -1,6 +1,17 @@
+# --- runtime ---
 faker
 pymongo
-google-genai          # current Vertex AI GenAI SDK (replaces google-cloud-aiplatform)
+google-genai          # current Vertex AI GenAI SDK (embeddings: gemini-embedding-001)
 google-adk            # agent runtime: MCP toolset + LongRunningFunctionTool (approval gate)
 fastapi
-uvicorn
+uvicorn[standard]
+pydantic>=2
+pydantic-settings>=2
+
+# --- test ---
+pytest
+pytest-asyncio
+mongomock             # in-memory MongoDB for tests (no Atlas needed)
+respx                 # mock HTTP (OFAC SDN fetch)
+httpx
+coverage
