@@ -1,0 +1,6 @@
+faker
+pymongo
+google-genai          # current Vertex AI GenAI SDK (replaces google-cloud-aiplatform)
+google-adk            # agent runtime: MCP toolset + LongRunningFunctionTool (approval gate)
+fastapi
+uvicorn
