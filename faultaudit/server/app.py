@@ -14,14 +14,143 @@ stable — the Frontend depends on them.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+import asyncio
+from typing import AsyncIterator
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
+
+from faultaudit.models import (
+    AgentEvent,
+    ApprovalDecision,
+    AuditReport,
+    EventType,
+    MissionRequest,
+    MissionStarted,
+)
+from faultaudit.server.events import to_sse
+from faultaudit.server.runner import FakeRunner
+from faultaudit.server.store import RunStore, run_store as _default_store
 
 app = FastAPI(title="FaultAuditAI")
 
+# Allow tests to inject a custom store by replacing app.state.store.
+# The default is the module-level singleton.
+app.state.store = _default_store
+
+
+def _get_store() -> RunStore:
+    return app.state.store  # type: ignore[attr-defined]
+
+
+# --------------------------------------------------------------------------- #
+# Background task: drive the runner and feed the event queue
+# --------------------------------------------------------------------------- #
+
+async def _run_mission(run_id: str, store: RunStore) -> None:
+    """Background task: iterate AgentEvents from the runner into the queue."""
+    record = store.get_run(run_id)
+    if record is None:
+        return
+
+    try:
+        async for event in record.runner.run(run_id, record.mission):
+            await record.queue.put(event)
+            # Cache the AuditReport when REPORT_READY fires so /api/report works.
+            if event.type == EventType.REPORT_READY:
+                report_data = event.data.get("report")
+                if report_data:
+                    report = AuditReport.model_validate(report_data)
+                    store.set_report(run_id, report)
+    except Exception as exc:  # noqa: BLE001
+        err_event = AgentEvent(
+            run_id=run_id,
+            type=EventType.ERROR,
+            data={"error": str(exc)},
+        )
+        await record.queue.put(err_event)
+        done_event = AgentEvent(run_id=run_id, type=EventType.DONE, data={})
+        await record.queue.put(done_event)
+    finally:
+        # Sentinel: None signals the SSE generator to close the stream.
+        await record.queue.put(None)
+
+
+# --------------------------------------------------------------------------- #
+# SSE generator
+# --------------------------------------------------------------------------- #
+
+async def _sse_generator(run_id: str, store: RunStore) -> AsyncIterator[str]:
+    record = store.get_run(run_id)
+    if record is None:
+        return
+
+    while True:
+        event: AgentEvent | None = await record.queue.get()
+        if event is None:
+            break
+        yield to_sse(event)
+        if event.type == EventType.DONE:
+            break
+
+
+# --------------------------------------------------------------------------- #
+# Routes
+# --------------------------------------------------------------------------- #
 
 @app.get("/healthz")
 def healthz() -> dict:
     return {"status": "ok"}
 
 
-# Backend/API slice: implement /api/mission, /api/events, /api/approve, /api/report.
+@app.post("/api/mission", response_model=MissionStarted)
+async def start_mission(body: MissionRequest) -> MissionStarted:
+    """Start a new audit mission. Returns a run_id immediately.
+
+    The runner is launched as a background task and feeds AgentEvents into the
+    run's queue, which the /api/events/{run_id} SSE stream consumes.
+    """
+    store = _get_store()
+    runner = FakeRunner()
+    record = store.create_run(body, runner)
+    asyncio.create_task(_run_mission(record.run_id, store))
+    return MissionStarted(run_id=record.run_id)
+
+
+@app.get("/api/events/{run_id}")
+async def stream_events(run_id: str) -> StreamingResponse:
+    """Stream AgentEvents as Server-Sent-Events until DONE."""
+    store = _get_store()
+    if store.get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
+    return StreamingResponse(
+        _sse_generator(run_id, store),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/approve/{run_id}")
+async def approve(run_id: str, body: ApprovalDecision) -> dict:
+    """Deliver an approval decision to resume a paused run."""
+    store = _get_store()
+    try:
+        await store.push_approval(run_id, body)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
+    return {"ok": True}
+
+
+@app.get("/api/report/{run_id}", response_model=AuditReport)
+def get_report(run_id: str) -> AuditReport:
+    """Return the final AuditReport for a completed run."""
+    store = _get_store()
+    report = store.get_report(run_id)
+    if report is None:
+        if store.get_run(run_id) is None:
+            raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
+        raise HTTPException(status_code=404, detail="Report not yet available")
+    return report

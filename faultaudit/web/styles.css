@@ -1,0 +1,170 @@
+/* FaultAuditAI — Finance Audit Console */
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #161b22; }
+::-webkit-scrollbar-thumb { background: #3d444d; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4d5561; }
+
+/* Smooth counter animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.kpi-update { animation: countUp 0.25s ease-out; }
+
+/* Timeline cards */
+.timeline-card {
+  border-left: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+.timeline-card:hover { border-left-color: #3b82f6; }
+.timeline-card.type-plan       { border-left-color: #3b82f6; }
+.timeline-card.type-tool_call  { border-left-color: #8b5cf6; }
+.timeline-card.type-tool_result{ border-left-color: #06b6d4; }
+.timeline-card.type-proposal   { border-left-color: #f97316; }
+.timeline-card.type-written    { border-left-color: #10b981; }
+.timeline-card.type-report_ready{ border-left-color: #10b981; }
+.timeline-card.type-done       { border-left-color: #10b981; }
+.timeline-card.type-error      { border-left-color: #ef4444; }
+.timeline-card.type-awaiting_approval { border-left-color: #f59e0b; }
+
+/* Reason chips */
+.reason-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+.reason-chip.duplicate        { background:#ef4444/15; border-color:#ef4444/40; color:#fca5a5; background-color: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); }
+.reason-chip.near_duplicate   { background-color: rgba(249,115,22,0.15); border-color: rgba(249,115,22,0.4); color: #fdba74; }
+.reason-chip.ghost_vendor     { background-color: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.4); color: #c4b5fd; }
+.reason-chip.policy_violation { background-color: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+.reason-chip.off_hours        { background-color: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); color: #fcd34d; }
+.reason-chip.ofac_hit         { background-color: rgba(239,68,68,0.25); border-color: rgba(239,68,68,0.6); color: #f87171; }
+.reason-chip.vector_similar   { background-color: rgba(6,182,212,0.15); border-color: rgba(6,182,212,0.4); color: #67e8f9; }
+
+/* Similarity bar */
+.sim-bar-track {
+  height: 4px;
+  background: #30363d;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.sim-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+}
+
+/* Row approve/reject toggle */
+.row-decision-btn {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.row-decision-btn.approve     { background-color: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.35); color: #6ee7b7; }
+.row-decision-btn.approve.active { background-color: rgba(16,185,129,0.30); border-color: #10b981; color: #fff; }
+.row-decision-btn.reject      { background-color: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.35); color: #fca5a5; }
+.row-decision-btn.reject.active  { background-color: rgba(239,68,68,0.30); border-color: #ef4444; color: #fff; }
+
+/* Pulse spinner */
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid rgba(59,130,246,0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Step number badge */
+.step-badge {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* Bar chart items */
+.bar-chart-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bar-chart-label {
+  width: 90px;
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.bar-chart-track {
+  flex: 1;
+  height: 8px;
+  background: #30363d;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.bar-chart-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.8s cubic-bezier(.23,1,.32,1);
+}
+.bar-chart-value {
+  width: 28px;
+  font-size: 11px;
+  color: #6b7280;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* Report markdown rendering */
+#report-content pre, #report-content code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  background: #21262d;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+#report-content pre { padding: 12px; overflow-x: auto; }
+#report-content h1, #report-content h2, #report-content h3 {
+  color: #e5e7eb;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+#report-content h1 { font-size: 1rem; font-weight: 700; }
+#report-content h2 { font-size: 0.9rem; font-weight: 600; border-bottom: 1px solid #30363d; padding-bottom: 4px; }
+#report-content h3 { font-size: 0.85rem; font-weight: 600; }
+#report-content p  { font-size: 0.8rem; color: #9ca3af; margin-bottom: 0.4em; }
+#report-content ul, #report-content ol { font-size: 0.8rem; color: #9ca3af; padding-left: 1.25rem; margin-bottom: 0.4em; }
+#report-content li { margin-bottom: 2px; }
+#report-content table { width: 100%; font-size: 0.75rem; border-collapse: collapse; }
+#report-content th { background:#21262d; padding: 4px 8px; text-align: left; color: #6b7280; }
+#report-content td { padding: 4px 8px; border-bottom: 1px solid #21262d; color: #9ca3af; }
+#report-content hr { border-color: #30363d; margin: 0.75em 0; }
+
+/* Fade-in for new cards */
+@keyframes fadeInUp {
+  from { opacity:0; transform: translateY(8px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+.fade-in { animation: fadeInUp 0.3s ease-out; }
+
+/* Status badge colors */
+.status-planning  { color: #3b82f6; }
+.status-executing { color: #8b5cf6; }
+.status-awaiting  { color: #f59e0b; }
+.status-done      { color: #10b981; }
+.status-error     { color: #ef4444; }

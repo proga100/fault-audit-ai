@@ -24,4 +24,16 @@ def check_policy(invoice: Invoice, policies: list[Policy]) -> list[PolicyViolati
     A policy applies if policy.category == invoice.category OR policy.category == "*".
     It is violated if invoice.amount > policy.max_amount.
     """
-    raise NotImplementedError("Agent-Core slice: implement via TDD")
+    violations: list[PolicyViolation] = []
+    for policy in policies:
+        applies = policy.category == "*" or policy.category == invoice.category
+        if applies and invoice.amount > policy.max_amount:
+            violations.append(
+                PolicyViolation(
+                    rule_id=policy.rule_id,
+                    text=policy.text,
+                    amount=invoice.amount,
+                    max_amount=policy.max_amount,
+                )
+            )
+    return violations
