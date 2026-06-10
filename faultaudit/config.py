@@ -34,14 +34,16 @@ class Settings(BaseSettings):
 
     # --- Google Cloud / Vertex AI ---
     gcp_project: str = ""
-    gcp_region: str = "us-central1"
-    gemini_model: str = "gemini-3-pro"          # fallback: gemini-3-flash
+    gcp_region: str = "us-central1"             # embeddings region
+    gemini_model: str = "gemini-3.1-pro-preview"  # Gemini 3 family
+    gemini_location: str = "global"             # Gemini 3 preview models serve from `global`
     embedding_model: str = "gemini-embedding-001"
     embedding_dims: int = 768
 
     # --- MongoDB MCP server (read path) ---
     mcp_command: str = "npx"
     mcp_args: str = "-y,mongodb-mcp-server,--readOnly"
+    use_mcp_reads: bool = True  # run the live vector search through the MCP server
 
     # --- OFAC ---
     ofac_sdn_url: str = "https://www.treasury.gov/ofac/downloads/sdn.csv"

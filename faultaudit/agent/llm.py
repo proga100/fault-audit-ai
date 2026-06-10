@@ -20,7 +20,8 @@ def _client():
     from google import genai
 
     s = get_settings()
-    return genai.Client(vertexai=True, project=s.gcp_project, location=s.gcp_region)
+    # Gemini 3 preview models serve from the `global` location, not us-central1.
+    return genai.Client(vertexai=True, project=s.gcp_project, location=s.gemini_location)
 
 
 def generate(prompt: str, fallback: str = "") -> str:

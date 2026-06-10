@@ -12,6 +12,15 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Node + the MongoDB MCP server (the partner integration the agent reads through)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g mongodb-mcp-server \
+    && apt-get purge -y curl gnupg && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
 # deps first for layer caching
 COPY requirements.txt .
 RUN pip install -r requirements.txt

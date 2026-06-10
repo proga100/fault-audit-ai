@@ -19,6 +19,7 @@ from pymongo import MongoClient
 
 from faultaudit.agent import llm
 from faultaudit.agent.embedding import embed_query
+from faultaudit.agent.mcp_reads import mcp_aggregate
 from faultaudit.agent.report import render_report
 from faultaudit.config import get_settings
 from faultaudit.models import (
@@ -86,13 +87,29 @@ class RealRunner:
             yield evt(EventType.DONE)
             return
 
-        # --- Tool 1: real Atlas $vectorSearch ---
-        yield evt(EventType.TOOL_CALL, tool="mongodb.vectorSearch", query=mission.text)
+        # --- Tool 1: $vectorSearch via the MongoDB MCP server (partner integration) ---
+        yield evt(EventType.TOOL_CALL, tool="mongodb.vectorSearch", query=mission.text,
+                  via="MongoDB MCP server")
         qvec = await asyncio.to_thread(embed_query, mission.text)
-        hits = await asyncio.to_thread(vector_search_transactions, db, qvec, 8)
+        source = "MongoDB MCP server"
+        hits: list[dict] = []
+        if self._settings.use_mcp_reads:
+            pipeline = [
+                {"$vectorSearch": {"index": self._settings.vector_index_name, "path": "embedding",
+                                   "queryVector": qvec, "numCandidates": 150, "limit": 8}},
+                {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
+                {"$project": {"_id": 0, "embedding": 0}},
+            ]
+            try:
+                hits = await mcp_aggregate(self._settings.db_name, self._settings.txn_collection, pipeline)
+            except Exception:  # noqa: BLE001
+                hits = []
+        if not hits:  # fallback keeps the demo reliable if the MCP subprocess hiccups
+            hits = await asyncio.to_thread(vector_search_transactions, db, qvec, 8)
+            source = "direct driver (MCP fallback)"
         top = round(hits[0]["score"], 4) if hits else 0.0
         yield evt(
-            EventType.TOOL_RESULT, tool="mongodb.vectorSearch", hits=len(hits), top_score=top,
+            EventType.TOOL_RESULT, tool="mongodb.vectorSearch", via=source, hits=len(hits), top_score=top,
             sample=[{"invoice_id": h.get("invoice_id"), "vendor_name": h.get("vendor_name"),
                      "score": round(h["score"], 3)} for h in hits[:5]],
         )
