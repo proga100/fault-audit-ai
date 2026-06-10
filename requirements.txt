@@ -3,6 +3,7 @@ faker
 pymongo
 google-genai          # current Vertex AI GenAI SDK (embeddings: gemini-embedding-001)
 google-adk            # agent runtime: MCP toolset + LongRunningFunctionTool (approval gate)
+mcp                   # MCP client SDK — runtime reads via the MongoDB MCP server
 fastapi
 uvicorn[standard]
 pydantic>=2
