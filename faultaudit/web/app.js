@@ -575,7 +575,6 @@ function renderReport(report) {
   document.getElementById('download-btn').classList.remove('hidden');
   document.getElementById('download-btn').classList.add('flex');
 
-  const md = report.markdown || '';
   document.getElementById('report-content').innerHTML = `
     <div class="mb-4 grid grid-cols-3 gap-3 p-3 bg-surface-700/40 rounded-lg border border-surface-600">
       <div class="text-center">
@@ -591,7 +590,8 @@ function renderReport(report) {
         <p class="text-xs font-mono text-gray-400 mt-1">${fmtTs(report.generated_at)}</p>
       </div>
     </div>
-    <div class="prose-audit text-sm">${renderMarkdown(md)}</div>
+    ${renderReportSummary(report)}
+    ${renderReportItemsTable(report.items || [])}
   `;
   renderReportsView();
 }
@@ -680,10 +680,72 @@ function renderReportsView() {
         <div><p class="text-xs text-gray-500">At Risk</p><p class="text-lg font-bold text-accent-orange">${fmtCurrency(state.report.total_at_risk || 0)}</p></div>
         <div><p class="text-xs text-gray-500">Run</p><p class="text-xs font-mono text-gray-400 mt-1">${escHtml((state.runId || '').slice(0,8))}</p></div>
       </div>
-      <div class="prose-audit text-sm">${renderMarkdown(state.report.markdown || '')}</div>
+      ${renderReportSummary(state.report)}
+      ${renderReportItemsTable(state.report.items || [])}
     `;
   }
   renderApprovalLog();
+}
+
+function renderReportSummary(report) {
+  const narrative = extractReportNarrative(report.markdown || '')
+    || `Approved ${report.flagged_count || 0} flagged invoice${(report.flagged_count || 0) === 1 ? '' : 's'} totaling ${fmtCurrency(report.total_at_risk || 0)} at risk for the mission "${report.mission || 'audit mission'}". Review the table below for invoice-level evidence and use Export CSV for Excel.`;
+  return `
+    <div class="mb-4 rounded-lg border border-surface-600 bg-surface-700/30 p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Executive Summary</p>
+      <p class="text-sm text-gray-300 leading-relaxed">${escHtml(narrative)}</p>
+    </div>
+  `;
+}
+
+function renderReportItemsTable(items) {
+  if (!items.length) {
+    return '<div class="rounded-lg border border-surface-600 bg-surface-700/30 p-4 text-sm text-gray-500">No flagged items were approved for this report.</div>';
+  }
+  const rows = items.map(item => {
+    const reasons = (item.reasons || []).map(r =>
+      `<span class="reason-chip ${escHtml(r)}">${escHtml(String(r).replace(/_/g, ' '))}</span>`
+    ).join(' ');
+    return `
+      <tr>
+        <td class="report-cell font-mono text-brand-300 whitespace-nowrap">${escHtml(item.invoice_id)}</td>
+        <td class="report-cell min-w-[160px] text-gray-200">${escHtml(item.vendor_name)}</td>
+        <td class="report-cell whitespace-nowrap text-gray-400">${escHtml(item.department)}</td>
+        <td class="report-cell text-right font-mono text-accent-red whitespace-nowrap">${fmtCurrency(item.amount)}</td>
+        <td class="report-cell min-w-[180px]"><div class="flex flex-wrap gap-1">${reasons}</div></td>
+        <td class="report-cell min-w-[280px] text-gray-300 leading-relaxed">${escHtml(item.detail || '')}</td>
+      </tr>
+    `;
+  }).join('');
+  return `
+    <div class="rounded-lg border border-surface-600 bg-surface-800 overflow-hidden">
+      <div class="px-4 py-3 border-b border-surface-600 bg-surface-700/50 flex items-center gap-2">
+        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Flagged Items</span>
+        <span class="ml-auto text-xs text-gray-500 font-mono">${items.length} rows · export CSV for Excel</span>
+      </div>
+      <div class="report-table-wrap">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Invoice ID</th>
+              <th>Vendor</th>
+              <th>Dept</th>
+              <th class="text-right">Amount</th>
+              <th>Reasons</th>
+              <th>Evidence Detail</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function extractReportNarrative(md) {
+  const lines = String(md || '').split('\n').map(line => line.trim()).filter(Boolean);
+  const skip = /^(#|\\||-{3,}|\\*\\*Mission:|\\*\\*Run ID:|\\*\\*Flagged invoices:|\\*\\*Total at risk:|- \\*\\*)/;
+  return lines.find(line => !skip.test(line)) || '';
 }
 
 function renderApprovalLog() {

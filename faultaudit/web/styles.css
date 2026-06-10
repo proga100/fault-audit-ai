@@ -200,6 +200,37 @@
 #report-content td { padding: 4px 8px; border-bottom: 1px solid #21262d; color: #9ca3af; }
 #report-content hr { border-color: #30363d; margin: 0.75em 0; }
 
+/* Report table rendering */
+.report-table-wrap {
+  max-height: 58vh;
+  overflow: auto;
+}
+.report-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.report-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #21262d;
+  color: #9ca3af;
+  text-align: left;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-bottom: 1px solid #30363d;
+}
+.report-table tbody tr:nth-child(even) { background: rgba(33,38,45,0.38); }
+.report-table tbody tr:hover { background: rgba(37,99,235,0.10); }
+.report-cell {
+  vertical-align: top;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(48,54,61,0.8);
+}
+
 /* Fade-in for new cards */
 @keyframes fadeInUp {
   from { opacity:0; transform: translateY(8px); }
