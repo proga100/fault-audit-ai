@@ -1,0 +1,17 @@
+# secrets — NEVER ship these in an image
+.env
+gcp-key.json
+*-key.json
+
+# local cruft
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+.claude/
+.grill/
+tests/
+demo_dataset/*.json
+sdn.csv
+*.md

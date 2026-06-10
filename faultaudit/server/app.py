@@ -160,3 +160,15 @@ def get_report(run_id: str) -> AuditReport:
             raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
         raise HTTPException(status_code=404, detail="Report not yet available")
     return report
+
+
+# --------------------------------------------------------------------------- #
+# Serve the web UI (mounted last so it doesn't shadow /api routes)
+# --------------------------------------------------------------------------- #
+from pathlib import Path  # noqa: E402
+
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+_WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+if _WEB_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(_WEB_DIR), html=True), name="web")
