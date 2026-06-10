@@ -17,7 +17,7 @@ from typing import AsyncIterator
 
 from pymongo import MongoClient
 
-from faultaudit.agent import llm
+from faultaudit.agent import llm, roster
 from faultaudit.agent.embedding import embed_query
 from faultaudit.agent.mcp_reads import mcp_aggregate
 from faultaudit.agent.report import render_report
@@ -28,26 +28,12 @@ from faultaudit.models import (
     ApprovalGate,
     EventType,
     FlaggedItem,
-    FlaggedReason,
-    Invoice,
     MissionRequest,
-    Policy,
-    Vendor,
 )
-from faultaudit.tools.dedup import find_exact_duplicates
 from faultaudit.tools.mongo_reads import aggregate_spend, vector_search_transactions
-from faultaudit.tools.policy import check_policy
+from faultaudit.tools.triage import assemble_flagged
 
-BUSINESS_START, BUSINESS_END = 8, 18
-VECTOR_SIMILAR_MIN = 0.80  # surface vector hits at/above this score as VECTOR_SIMILAR
 MAX_FLAGGED = 40  # cap: a human reviews exceptions, not hundreds of rows
-HIGH_SIGNAL = {
-    FlaggedReason.OFAC_HIT,
-    FlaggedReason.GHOST_VENDOR,
-    FlaggedReason.DUPLICATE,
-    FlaggedReason.NEAR_DUPLICATE,
-    FlaggedReason.VECTOR_SIMILAR,
-}
 
 
 class RealRunner:
@@ -79,8 +65,8 @@ class RealRunner:
             plan = await asyncio.wait_for(asyncio.to_thread(llm.plan_for, mission.text), timeout=30)
         except (asyncio.TimeoutError, Exception):
             plan = _PLAN_FALLBACK
-        yield evt(EventType.PLAN, plan=plan)
-        yield evt(EventType.AWAITING_APPROVAL, gate=ApprovalGate.PLAN.value)
+        yield evt(EventType.PLAN, plan=plan, **roster.MISSION_PLANNING)
+        yield evt(EventType.AWAITING_APPROVAL, gate=ApprovalGate.PLAN.value, **roster.HUMAN_GATE)
         await self._wait(run_id)
         if not self._decisions.pop(run_id).approved:
             yield evt(EventType.ERROR, reason="Plan rejected by reviewer")
@@ -89,7 +75,7 @@ class RealRunner:
 
         # --- Tool 1: $vectorSearch via the MongoDB MCP server (partner integration) ---
         yield evt(EventType.TOOL_CALL, tool="mongodb.vectorSearch", query=mission.text,
-                  via="MongoDB MCP server")
+                  via="MongoDB MCP server", **roster.VECTOR_SEARCH)
         qvec = await asyncio.to_thread(embed_query, mission.text)
         source = "MongoDB MCP server"
         hits: list[dict] = []
@@ -112,13 +98,15 @@ class RealRunner:
             EventType.TOOL_RESULT, tool="mongodb.vectorSearch", via=source, hits=len(hits), top_score=top,
             sample=[{"invoice_id": h.get("invoice_id"), "vendor_name": h.get("vendor_name"),
                      "score": round(h["score"], 3)} for h in hits[:5]],
+            **roster.VECTOR_SEARCH,
         )
 
         # --- Tool 2: real aggregation ---
-        yield evt(EventType.TOOL_CALL, tool="mongodb.aggregate", group_by="department")
+        yield evt(EventType.TOOL_CALL, tool="mongodb.aggregate", group_by="department", **roster.SPEND_ANALYSIS)
         spend = await asyncio.to_thread(aggregate_spend, db, "department")
         yield evt(EventType.TOOL_RESULT, tool="mongodb.aggregate",
-                  by_department=sorted(spend, key=lambda s: s["total"], reverse=True))
+                  by_department=sorted(spend, key=lambda s: s["total"], reverse=True),
+                  **roster.SPEND_ANALYSIS)
 
         # --- Assemble flagged list (fast detectors + vector hits), cap for review ---
         all_items = await asyncio.to_thread(self._assemble, db, hits)
@@ -136,8 +124,9 @@ class RealRunner:
             total_at_risk=sum(i.amount for i in all_items),
             dept_counts=dict(dept_counts),
             vendor_counts=dict(vendor_counts),
+            **roster.RISK_TRIAGE,
         )
-        yield evt(EventType.AWAITING_APPROVAL, gate=ApprovalGate.ACTION.value)
+        yield evt(EventType.AWAITING_APPROVAL, gate=ApprovalGate.ACTION.value, **roster.HUMAN_GATE)
         await self._wait(run_id)
         decision = self._decisions.pop(run_id)
 
@@ -155,7 +144,7 @@ class RealRunner:
         from faultaudit.tools.flagging import mark_flagged
 
         await asyncio.to_thread(mark_flagged, db, run_id, [i.invoice_id for i in approved], approved)
-        yield evt(EventType.WRITTEN, flagged=len(approved))
+        yield evt(EventType.WRITTEN, flagged=len(approved), **roster.AUDIT_TRAIL)
 
         # --- Report (Gemini narrative + structured) ---
         report = render_report(run_id, mission.text, approved)
@@ -170,7 +159,8 @@ class RealRunner:
                          f"${report.total_at_risk:,.0f} at risk across {len(set(reasons))} risk types.")
         report.markdown = f"# Audit Report\n\n{narrative}\n\n" + report.markdown
         yield evt(EventType.REPORT_READY, run_id=run_id, flagged_count=report.flagged_count,
-                  total_at_risk=report.total_at_risk, report=report.model_dump(mode="json"))
+                  total_at_risk=report.total_at_risk, report=report.model_dump(mode="json"),
+                  **roster.REPORT_GENERATION)
         yield evt(EventType.DONE)
 
     async def deliver_decision(self, run_id: str, decision: ApprovalDecision) -> None:
@@ -187,54 +177,4 @@ class RealRunner:
 
     # --------------------------------------------------------------- audit
     def _assemble(self, db, vector_hits: list[dict]) -> list[FlaggedItem]:
-        invoices = [Invoice.model_validate(d) for d in db.transactions.find({}, {"embedding": 0})]
-        vendors = {v["vendor_id"]: Vendor.model_validate(v) for v in db.vendors.find({}, {"_id": 0})}
-        policies = [Policy.model_validate(p) for p in db.policies.find({}, {"_id": 0})]
-        by_id = {i.invoice_id: i for i in invoices}
-
-        reasons: dict[str, set[FlaggedReason]] = defaultdict(set)
-        details: dict[str, list[str]] = defaultdict(list)
-        sims: dict[str, float] = {}
-
-        for inv in invoices:
-            for v in check_policy(inv, policies):
-                reasons[inv.invoice_id].add(FlaggedReason.POLICY_VIOLATION)
-                details[inv.invoice_id].append(f"{v.rule_id}: {v.amount:.0f} > {v.max_amount:.0f}")
-            vend = vendors.get(inv.vendor_id)
-            if vend and vend.is_ghost:
-                reasons[inv.invoice_id].add(FlaggedReason.GHOST_VENDOR)
-                details[inv.invoice_id].append("payment to ghost vendor")
-            if inv.payment_hour < BUSINESS_START or inv.payment_hour > BUSINESS_END:
-                reasons[inv.invoice_id].add(FlaggedReason.OFF_HOURS)
-                details[inv.invoice_id].append(f"paid at {inv.payment_hour:02d}:00")
-
-        for original_id, dup_id in find_exact_duplicates(invoices):
-            reasons[dup_id].add(FlaggedReason.DUPLICATE)
-            details[dup_id].append(f"exact duplicate of {original_id}")
-
-        # vector-similar to the mission (real $vectorSearch results)
-        for h in vector_hits:
-            score = h.get("score", 0.0)
-            iid = h.get("invoice_id")
-            if iid and score >= VECTOR_SIMILAR_MIN:
-                reasons[iid].add(FlaggedReason.VECTOR_SIMILAR)
-                sims[iid] = score
-                details[iid].append(f"semantically matches the audit query ({score:.2f})")
-
-        items: list[FlaggedItem] = []
-        for iid, rset in reasons.items():
-            inv = by_id.get(iid)
-            if inv is None:
-                continue
-            items.append(FlaggedItem(
-                invoice_id=iid, vendor_name=inv.vendor_name, department=inv.department,
-                amount=inv.amount, reasons=sorted(rset, key=lambda r: r.value),
-                similarity=sims.get(iid), detail="; ".join(details[iid]),
-            ))
-        # Prioritise: high-signal fraud first, then by # of distinct reasons, then $.
-        def _priority(it: FlaggedItem):
-            high = len(set(it.reasons) & HIGH_SIGNAL)
-            return (high > 0, high, len(it.reasons), it.amount)
-
-        items.sort(key=_priority, reverse=True)
-        return items  # full sorted list; caller caps and reports the total
+        return assemble_flagged(db, vector_hits)  # full sorted list; caller caps and reports the total

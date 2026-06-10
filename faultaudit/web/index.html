@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FaultAuditAI — Corporate Finance Audit Console</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232563eb'/%3E%3Cpath d='M9 16l4 4 10-10' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="styles.css" />
   <script>
@@ -50,7 +51,7 @@
 <body class="h-full bg-surface-900 text-gray-100 font-sans antialiased">
 
 <!-- Top bar -->
-<header class="fixed top-0 left-0 right-0 z-50 h-12 bg-surface-800 border-b border-surface-600 flex items-center px-6 gap-4">
+<header class="fixed top-0 left-0 right-0 z-50 min-h-12 bg-surface-800 border-b border-surface-600 flex items-center px-4 lg:px-6 gap-4 flex-wrap py-2">
   <div class="flex items-center gap-2.5">
     <div class="w-7 h-7 rounded-md bg-brand-500 flex items-center justify-center">
       <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -60,7 +61,14 @@
     <span class="font-semibold text-sm tracking-tight text-white">FaultAuditAI</span>
     <span class="text-surface-500 text-xs font-mono">v1.0</span>
   </div>
+  <nav class="flex items-center gap-1 bg-surface-900/70 border border-surface-600 rounded-lg p-1">
+    <button id="tab-mission" onclick="switchTab('mission')" class="tab-btn active">Mission Control</button>
+    <button id="tab-findings" onclick="switchTab('findings')" class="tab-btn">Findings</button>
+    <button id="tab-reports" onclick="switchTab('reports')" class="tab-btn">Reports</button>
+  </nav>
+  <div id="integration-strip" class="hidden xl:flex items-center gap-2 text-[11px] text-gray-400 overflow-hidden"></div>
   <div class="flex-1"></div>
+  <button onclick="openAskDrawer()" class="px-3 py-1.5 rounded-md bg-brand-500 hover:bg-brand-400 text-white text-xs font-semibold transition-colors">Ask Agent</button>
   <div id="run-status-badge" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface-700 border border-surface-500">
     <span id="status-dot" class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
     <span id="status-text">Idle</span>
@@ -71,7 +79,7 @@
 </header>
 
 <!-- Main layout -->
-<div class="flex h-full pt-12">
+<div id="mission-view" class="app-view flex h-full pt-16">
 
   <!-- LEFT PANE: Mission Console -->
   <div class="w-[540px] flex-shrink-0 border-r border-surface-600 flex flex-col bg-surface-900 overflow-hidden">
@@ -200,14 +208,14 @@
       <!-- KPI row -->
       <div class="grid grid-cols-3 gap-4">
         <div class="rounded-xl bg-surface-800 border border-surface-600 p-4">
-          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">$ At Risk</p>
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Spend / At Risk</p>
           <p id="kpi-at-risk" class="text-2xl font-bold text-accent-red tabular-nums">$0</p>
-          <p class="text-xs text-gray-600 mt-1">total flagged value</p>
+          <p class="text-xs text-gray-600 mt-1">baseline spend, then flagged value</p>
         </div>
         <div class="rounded-xl bg-surface-800 border border-surface-600 p-4">
-          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Flags</p>
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Invoices / Flags</p>
           <p id="kpi-flags" class="text-2xl font-bold text-accent-orange tabular-nums">0</p>
-          <p class="text-xs text-gray-600 mt-1">suspicious items</p>
+          <p class="text-xs text-gray-600 mt-1">baseline invoices, then suspicious items</p>
         </div>
         <div class="rounded-xl bg-surface-800 border border-surface-600 p-4">
           <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Vendors Checked</p>
@@ -267,6 +275,95 @@
   </div>
 
 </div>
+
+<!-- Findings tab -->
+<section id="findings-view" class="app-view hidden h-full pt-16 bg-surface-900 overflow-y-auto">
+  <div class="p-5 grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-5">
+    <div class="rounded-lg bg-surface-800 border border-surface-600 overflow-hidden">
+      <div class="px-4 py-3 border-b border-surface-600 bg-surface-700/50 flex items-center gap-2">
+        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Findings Review</span>
+        <span id="findings-count" class="ml-auto text-xs text-gray-500 font-mono">0 items</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-surface-700 border-b border-surface-600">
+            <tr>
+              <th class="px-3 py-2 text-left text-gray-400 font-medium">Vendor</th>
+              <th class="px-3 py-2 text-left text-gray-400 font-medium">Invoice</th>
+              <th class="px-3 py-2 text-left text-gray-400 font-medium">Dept</th>
+              <th class="px-3 py-2 text-right text-gray-400 font-medium">Amount</th>
+              <th class="px-3 py-2 text-left text-gray-400 font-medium">Reasons</th>
+              <th class="px-3 py-2 text-left text-gray-400 font-medium">Agent</th>
+              <th class="px-3 py-2 text-left text-gray-400 font-medium">Tool</th>
+              <th class="px-3 py-2 text-left text-gray-400 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody id="findings-tbody" class="divide-y divide-surface-700"></tbody>
+        </table>
+      </div>
+    </div>
+    <aside class="rounded-lg bg-surface-800 border border-surface-600 overflow-hidden">
+      <div class="px-4 py-3 border-b border-surface-600 bg-surface-700/50">
+        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Evidence Detail</span>
+      </div>
+      <div id="finding-detail" class="p-4 text-sm text-gray-500">
+        Select a finding to inspect its evidence.
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- Reports tab -->
+<section id="reports-view" class="app-view hidden h-full pt-16 bg-surface-900 overflow-y-auto">
+  <div class="p-5 grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-5">
+    <div class="rounded-lg bg-surface-800 border border-surface-600 overflow-hidden">
+      <div class="px-4 py-3 border-b border-surface-600 bg-surface-700/50 flex items-center gap-2">
+        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Final Audit Report</span>
+        <div class="ml-auto flex gap-2">
+          <button onclick="downloadReport()" class="px-3 py-1 rounded-md bg-brand-500 hover:bg-brand-400 text-white text-xs font-semibold">Download .md</button>
+          <button onclick="exportFindingsCsv()" class="px-3 py-1 rounded-md bg-surface-700 border border-surface-500 text-gray-300 text-xs font-semibold">Export CSV</button>
+          <button onclick="copyCfoSummary()" class="px-3 py-1 rounded-md bg-surface-700 border border-surface-500 text-gray-300 text-xs font-semibold">Copy CFO Summary</button>
+        </div>
+      </div>
+      <div id="reports-report-content" class="p-4">
+        <p class="text-sm text-gray-600">Report will appear here when the audit completes.</p>
+      </div>
+    </div>
+    <aside class="rounded-lg bg-surface-800 border border-surface-600 overflow-hidden">
+      <div class="px-4 py-3 border-b border-surface-600 bg-surface-700/50">
+        <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Human Approval Log</span>
+      </div>
+      <div id="approval-log" class="p-4 space-y-2 text-sm text-gray-500">
+        No approvals recorded yet.
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- Ask Audit Agent drawer -->
+<div id="ask-backdrop" class="hidden fixed inset-0 z-[60] bg-black/50" onclick="closeAskDrawer()"></div>
+<aside id="ask-drawer" class="fixed top-0 right-0 z-[70] h-full w-full max-w-md translate-x-full bg-surface-800 border-l border-surface-600 shadow-2xl transition-transform duration-200 flex flex-col">
+  <div class="px-5 py-4 border-b border-surface-600 flex items-start gap-3">
+    <div>
+      <h2 class="text-sm font-semibold text-white">Ask Audit Agent</h2>
+      <p class="text-xs text-gray-500 mt-1">Ask about this audit mission, vendors, invoices, or findings.</p>
+    </div>
+    <button onclick="closeAskDrawer()" class="ml-auto text-gray-500 hover:text-white text-xl leading-none">&times;</button>
+  </div>
+  <div class="px-5 py-3 border-b border-surface-700 flex flex-wrap gap-2">
+    <button onclick="askPrompt('Why was this invoice flagged?')" class="prompt-chip">Why flagged?</button>
+    <button onclick="askPrompt('Top risky vendors')" class="prompt-chip">Top risky vendors</button>
+    <button onclick="askPrompt('Which case should I review first?')" class="prompt-chip">Review first</button>
+    <button onclick="askPrompt('Draft CFO summary')" class="prompt-chip">CFO summary</button>
+  </div>
+  <div id="ask-messages" class="flex-1 overflow-y-auto p-5 space-y-3 text-sm"></div>
+  <div class="p-4 border-t border-surface-600">
+    <div class="flex gap-2">
+      <input id="ask-input" type="text" placeholder="Ask a question..." class="flex-1 bg-surface-700 border border-surface-500 rounded-md px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-400" onkeydown="if(event.key==='Enter') submitAsk()" />
+      <button onclick="submitAsk()" class="px-4 rounded-md bg-brand-500 hover:bg-brand-400 text-white text-sm font-semibold">Ask</button>
+    </div>
+  </div>
+</aside>
 
 <script src="app.js"></script>
 </body>

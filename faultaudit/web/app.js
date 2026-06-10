@@ -12,10 +12,76 @@ const state = {
   flaggedItems: [],      // current FlaggedItem[]
   atRisk: 0,
   rowDecisions: {},      // invoice_id -> 'approve' | 'reject'
+  itemStatuses: {},      // invoice_id -> pending | approved | rejected
   report: null,
   deptCounts: {},
   vendorFlags: {},
+  approvalLog: [],
+  appStatus: null,
+  baselineStats: null,
+  currentTab: 'mission',
+  selectedFindingId: null,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Boot / shell
+// ─────────────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadStatus();
+  loadStats();
+  renderFindingsView();
+  renderApprovalLog();
+});
+
+function switchTab(tab) {
+  state.currentTab = tab;
+  document.querySelectorAll('.app-view').forEach(v => v.classList.add('hidden'));
+  document.getElementById(`${tab}-view`)?.classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${tab}`)?.classList.add('active');
+  if (tab === 'findings') renderFindingsView();
+  if (tab === 'reports') renderReportsView();
+}
+
+async function loadStatus() {
+  try {
+    const res = await fetch('/api/status');
+    if (!res.ok) return;
+    state.appStatus = await res.json();
+    renderIntegrationStrip();
+  } catch {}
+}
+
+async function loadStats() {
+  try {
+    const res = await fetch('/api/stats');
+    if (!res.ok) return;
+    state.baselineStats = await res.json();
+    seedBaselineKpis();
+  } catch {}
+}
+
+function renderIntegrationStrip() {
+  const el = document.getElementById('integration-strip');
+  if (!el || !state.appStatus) return;
+  const s = state.appStatus;
+  const runtime = s.agent_runtime_label || s.agent_runtime || 'runtime';
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <span class="status-chip">${escHtml(runtime)}</span>
+    <span class="tool-chip gemini">${escHtml(s.gemini_model || 'Gemini 3.x')}</span>
+    <span class="tool-chip mongo">${s.mcp_enabled ? 'MongoDB MCP' : 'MongoDB MCP ready'}</span>
+    <span class="tool-chip human">Human Approval</span>
+    <span class="status-chip">${String(s.mode || 'demo').toUpperCase()}</span>
+  `;
+}
+
+function seedBaselineKpis() {
+  if (!state.baselineStats || state.runId) return;
+  document.getElementById('kpi-at-risk').textContent = fmtCurrency(state.baselineStats.total_spend || 0);
+  document.getElementById('kpi-flags').textContent = state.baselineStats.invoices ?? 0;
+  document.getElementById('kpi-vendors').textContent = state.baselineStats.vendors ?? '—';
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Template buttons
@@ -145,7 +211,12 @@ function handleProposal(evt) {
   state.atRisk = evt.data?.total_at_risk ?? items.reduce((s, i) => s + (i.amount || 0), 0);
   state.deptCounts = evt.data?.dept_counts || {};
   state.vendorFlags = evt.data?.vendor_counts || {};
-  items.forEach(item => { state.rowDecisions[item.invoice_id] = 'approve'; });
+  items.forEach(item => {
+    state.rowDecisions[item.invoice_id] = 'approve';
+    state.itemStatuses[item.invoice_id] = 'pending';
+    item._agent = evt.data?.agent || evt.data?.adk_agent_name || 'Risk Triage Agent';
+    item._tool_label = evt.data?.tool_label || 'Internal detector fallback';
+  });
 
   animateKPICurrency('kpi-at-risk', state.atRisk);
   animateKPI('kpi-flags', total);
@@ -160,6 +231,7 @@ function handleProposal(evt) {
   }
 
   appendTimelineCard('proposal', evt.data);
+  renderFindingsView();
 }
 
 function handleAwaitingApproval(evt) {
@@ -183,6 +255,12 @@ function handleAwaitingApproval(evt) {
 function handleWritten(evt) {
   setStatusBadge('executing', 'Writing…');
   document.getElementById('gate-action').classList.add('hidden');
+  state.flaggedItems.forEach(item => {
+    state.itemStatuses[item.invoice_id] = state.rowDecisions[item.invoice_id] === 'approve'
+      ? 'approved'
+      : 'rejected';
+  });
+  renderFindingsView();
   appendTimelineCard('written', evt.data);
 }
 
@@ -195,6 +273,7 @@ async function handleReportReady(evt) {
     if (res.ok) {
       state.report = await res.json();
       renderReport(state.report);
+      renderReportsView();
     }
   } catch {}
 }
@@ -247,14 +326,14 @@ function appendTimelineCard(type, data) {
       ? `<p class="text-xs text-gray-300 font-mono whitespace-pre-wrap mt-1 leading-relaxed">${escHtml(planText)}</p>`
       : '';
   } else if (type === 'tool_call') {
-    const tool = data?.tool_name || data?.name || 'unknown';
+    const tool = data?.tool || data?.tool_name || data?.name || 'unknown';
     const args = data?.args || data?.input || {};
     bodyHtml = `
       <span class="text-xs font-mono text-purple-300 font-semibold">${escHtml(tool)}</span>
       ${Object.keys(args).length ? `<pre class="text-xs text-gray-500 font-mono mt-1 bg-surface-700/50 rounded p-2 overflow-x-auto">${escHtml(JSON.stringify(args, null, 2))}</pre>` : ''}
     `;
   } else if (type === 'tool_result') {
-    const tool = data?.tool_name || data?.name || '';
+    const tool = data?.tool || data?.tool_name || data?.name || '';
     const count = data?.count ?? data?.hit_count ?? data?.total ?? null;
     const scores = data?.similarity_scores || data?.scores || [];
     let scoreHtml = '';
@@ -281,7 +360,7 @@ function appendTimelineCard(type, data) {
     const gate = data?.gate || '';
     bodyHtml = `<p class="text-xs text-yellow-300/80 mt-1">Gate <span class="font-mono font-semibold">${escHtml(gate)}</span> — action required above</p>`;
   } else if (type === 'written') {
-    const n = data?.written_count ?? data?.count ?? '';
+    const n = data?.flagged ?? data?.written_count ?? data?.count ?? '';
     bodyHtml = n !== '' ? `<p class="text-xs text-green-300/80 mt-1">${n} item${n !== 1 ? 's' : ''} committed to audit log.</p>` : '';
   } else if (type === 'report_ready') {
     bodyHtml = `<p class="text-xs text-green-300/80 mt-1">Audit report generated — see dashboard panel.</p>`;
@@ -292,10 +371,18 @@ function appendTimelineCard(type, data) {
     bodyHtml = `<p class="text-xs text-green-300/80 mt-1">Audit run complete.</p>`;
   }
 
+  const agent = data?.adk_agent_name || data?.agent || '';
+  const toolLabel = data?.tool_label || data?.via || '';
+  const chipHtml = `
+    ${agent ? `<span class="agent-chip text-[10px]">${escHtml(agent)}</span>` : ''}
+    ${toolLabel ? `<span class="tool-chip ${toolChipClass(toolLabel)} text-[10px]">${escHtml(toolLabel)}</span>` : ''}
+  `;
+
   card.innerHTML = `
     <div class="flex items-center gap-2 mb-0.5">
       <span class="step-badge bg-surface-700 text-gray-400">${state.stepCount}</span>
       <span class="px-1.5 py-0.5 rounded border text-xs font-semibold ${meta.badge}">${meta.label}</span>
+      ${chipHtml}
       <span class="ml-auto text-xs text-gray-600 font-mono">${tsNow()}</span>
     </div>
     ${bodyHtml}
@@ -391,10 +478,12 @@ function approveAll() {
 // Approval submissions
 // ─────────────────────────────────────────────────────────────────────────────
 async function approvePlan() {
+  recordApproval('plan', 'approved', 'Plan approved');
   await postApproval({ gate: 'plan', approved: true });
   document.getElementById('gate-plan').classList.add('hidden');
 }
 async function rejectPlan() {
+  recordApproval('plan', 'rejected', 'Plan rejected');
   await postApproval({ gate: 'plan', approved: false });
   document.getElementById('gate-plan').classList.add('hidden');
 }
@@ -403,6 +492,7 @@ function togglePlanEdit() {
 }
 async function submitEditedPlan() {
   const edited = document.getElementById('plan-edit-input').value.trim();
+  recordApproval('plan', 'approved', 'Edited plan submitted');
   await postApproval({ gate: 'plan', approved: true, edited_plan: edited });
   document.getElementById('gate-plan').classList.add('hidden');
 }
@@ -414,6 +504,7 @@ async function submitActionDecision() {
     if (dec === 'approve') approvedIds.push(id);
     else rejectedIds.push(id);
   });
+  recordApproval('action', 'approved', `${approvedIds.length} approved, ${rejectedIds.length} rejected`);
   setStatusBadge('executing', 'Writing…');
   await postApproval({ gate: 'action', approved: true, approved_ids: approvedIds, rejected_ids: rejectedIds });
   document.getElementById('gate-action').classList.add('hidden');
@@ -434,6 +525,11 @@ async function postApproval(decision) {
   } catch (err) {
     console.error('Approval error:', err);
   }
+}
+
+function recordApproval(gate, decision, detail) {
+  state.approvalLog.unshift({ gate, decision, detail, ts: new Date().toISOString() });
+  renderApprovalLog();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -497,6 +593,115 @@ function renderReport(report) {
     </div>
     <div class="prose-audit text-sm">${renderMarkdown(md)}</div>
   `;
+  renderReportsView();
+}
+
+function renderFindingsView() {
+  const tbody = document.getElementById('findings-tbody');
+  if (!tbody) return;
+  document.getElementById('findings-count').textContent = `${state.flaggedItems.length} item${state.flaggedItems.length === 1 ? '' : 's'}`;
+  if (!state.flaggedItems.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="px-3 py-8 text-center text-gray-600">No findings yet. Run a mission to populate this table.</td></tr>`;
+    renderFindingDetail(null);
+    return;
+  }
+  tbody.innerHTML = state.flaggedItems.map(item => {
+    const status = state.itemStatuses[item.invoice_id] || 'pending';
+    const reasons = (item.reasons || []).map(r => `<span class="reason-chip ${escHtml(r)}">${escHtml(String(r).replace(/_/g,' '))}</span>`).join(' ');
+    const active = state.selectedFindingId === item.invoice_id ? 'active' : '';
+    const agent = item._agent || 'Risk Triage Agent';
+    const tool = item._tool_label || 'Internal detector fallback';
+    return `
+      <tr class="finding-row ${active}" onclick="selectFinding('${escAttr(item.invoice_id)}')">
+        <td class="px-3 py-2 text-gray-200 max-w-[180px] truncate" title="${escHtml(item.vendor_name)}">${escHtml(item.vendor_name)}</td>
+        <td class="px-3 py-2 font-mono text-brand-300">${escHtml(item.invoice_id)}</td>
+        <td class="px-3 py-2 text-gray-400">${escHtml(item.department)}</td>
+        <td class="px-3 py-2 text-right font-mono text-accent-red">${fmtCurrency(item.amount)}</td>
+        <td class="px-3 py-2"><div class="flex flex-wrap gap-1">${reasons}</div></td>
+        <td class="px-3 py-2 text-gray-400">${escHtml(agent)}</td>
+        <td class="px-3 py-2"><span class="tool-chip ${toolChipClass(tool)} text-[10px]">${escHtml(tool)}</span></td>
+        <td class="px-3 py-2"><span class="status-pill ${status}">${statusLabel(status)}</span></td>
+      </tr>
+    `;
+  }).join('');
+  const selected = state.flaggedItems.find(i => i.invoice_id === state.selectedFindingId) || state.flaggedItems[0];
+  if (!state.selectedFindingId && selected) state.selectedFindingId = selected.invoice_id;
+  renderFindingDetail(selected);
+}
+
+function selectFinding(invoiceId) {
+  state.selectedFindingId = invoiceId;
+  renderFindingsView();
+}
+
+function renderFindingDetail(item) {
+  const el = document.getElementById('finding-detail');
+  if (!el) return;
+  if (!item) {
+    el.innerHTML = 'Select a finding to inspect its evidence.';
+    return;
+  }
+  const reasons = (item.reasons || []).map(r => `<span class="reason-chip ${escHtml(r)}">${escHtml(String(r).replace(/_/g,' '))}</span>`).join(' ');
+  const sim = item.similarity != null ? Math.max(0, Math.min(100, Math.round(item.similarity * 100))) : null;
+  const detailLines = String(item.detail || 'No detail supplied.').split(';').map(s => s.trim()).filter(Boolean);
+  el.innerHTML = `
+    <div class="space-y-4">
+      <div>
+        <p class="text-xs text-gray-500 uppercase tracking-wide">Invoice</p>
+        <p class="font-mono text-brand-300">${escHtml(item.invoice_id)}</p>
+      </div>
+      <div>
+        <p class="text-xs text-gray-500 uppercase tracking-wide">Vendor / Amount</p>
+        <p class="text-gray-200">${escHtml(item.vendor_name)} · <span class="font-mono text-accent-red">${fmtCurrency(item.amount)}</span></p>
+      </div>
+      <div class="flex flex-wrap gap-1">${reasons}</div>
+      ${sim != null ? `<div>
+        <div class="flex justify-between text-xs text-gray-500 mb-1"><span>Similarity</span><span>${sim}%</span></div>
+        <div class="sim-bar-track"><div class="sim-bar-fill bg-cyan-500" style="width:${sim}%"></div></div>
+      </div>` : ''}
+      <div>
+        <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Evidence</p>
+        <ul class="space-y-1">${detailLines.map(line => `<li class="text-sm text-gray-300">• ${escHtml(line)}</li>`).join('')}</ul>
+      </div>
+      <button onclick="explainFinding('${escAttr(item.invoice_id)}')" class="w-full py-2 rounded-md bg-brand-500 hover:bg-brand-400 text-white text-sm font-semibold">Explain with AI</button>
+    </div>
+  `;
+}
+
+function renderReportsView() {
+  const reportEl = document.getElementById('reports-report-content');
+  if (!reportEl) return;
+  if (!state.report) {
+    reportEl.innerHTML = '<p class="text-sm text-gray-600">Report will appear here when the audit completes.</p>';
+  } else {
+    reportEl.innerHTML = `
+      <div class="mb-4 grid grid-cols-3 gap-3 p-3 bg-surface-700/40 rounded-lg border border-surface-600">
+        <div><p class="text-xs text-gray-500">Flagged</p><p class="text-lg font-bold text-accent-red">${state.report.flagged_count || 0}</p></div>
+        <div><p class="text-xs text-gray-500">At Risk</p><p class="text-lg font-bold text-accent-orange">${fmtCurrency(state.report.total_at_risk || 0)}</p></div>
+        <div><p class="text-xs text-gray-500">Run</p><p class="text-xs font-mono text-gray-400 mt-1">${escHtml((state.runId || '').slice(0,8))}</p></div>
+      </div>
+      <div class="prose-audit text-sm">${renderMarkdown(state.report.markdown || '')}</div>
+    `;
+  }
+  renderApprovalLog();
+}
+
+function renderApprovalLog() {
+  const el = document.getElementById('approval-log');
+  if (!el) return;
+  if (!state.approvalLog.length) {
+    el.innerHTML = 'No approvals recorded yet.';
+    return;
+  }
+  el.innerHTML = state.approvalLog.map(entry => `
+    <div class="rounded-md border border-surface-600 bg-surface-700/40 p-3">
+      <div class="flex items-center gap-2">
+        <span class="status-pill ${entry.decision === 'approved' ? 'approved' : 'rejected'}">${escHtml(entry.gate)}</span>
+        <span class="text-xs text-gray-500 font-mono ml-auto">${fmtTs(entry.ts)}</span>
+      </div>
+      <p class="text-sm text-gray-300 mt-2">${escHtml(entry.detail)}</p>
+    </div>
+  `).join('');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -514,12 +719,123 @@ function downloadReport() {
   URL.revokeObjectURL(url);
 }
 
+function exportFindingsCsv() {
+  const rows = [['Vendor','Invoice ID','Department','Amount','Reasons','Agent','Tool','Status']];
+  state.flaggedItems.forEach(item => {
+    rows.push([
+      item.vendor_name,
+      item.invoice_id,
+      item.department,
+      item.amount,
+      (item.reasons || []).join('|'),
+      item._agent || 'Risk Triage Agent',
+      item._tool_label || 'Internal detector fallback',
+      state.itemStatuses[item.invoice_id] || 'pending',
+    ]);
+  });
+  const csv = rows.map(row => row.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `audit-findings-${state.runId?.slice(0,8) || 'export'}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function copyCfoSummary() {
+  if (!state.report?.markdown) return;
+  const text = state.report.markdown
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#') && !line.startsWith('|'))[0] || '';
+  try { await navigator.clipboard.writeText(text); } catch {}
+}
+
+function openAskDrawer() {
+  document.getElementById('ask-backdrop').classList.remove('hidden');
+  document.getElementById('ask-drawer').classList.add('open');
+  setTimeout(() => document.getElementById('ask-input')?.focus(), 50);
+}
+
+function closeAskDrawer() {
+  document.getElementById('ask-backdrop').classList.add('hidden');
+  document.getElementById('ask-drawer').classList.remove('open');
+}
+
+function askPrompt(text) {
+  document.getElementById('ask-input').value = text;
+  submitAsk();
+}
+
+async function explainFinding(invoiceId) {
+  const item = state.flaggedItems.find(i => i.invoice_id === invoiceId);
+  if (!item) return;
+  openAskDrawer();
+  document.getElementById('ask-input').value = `Why was invoice ${item.invoice_id} from ${item.vendor_name} flagged?`;
+  await submitAsk();
+}
+
+async function submitAsk() {
+  const input = document.getElementById('ask-input');
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = '';
+  appendAskMessage('user', question);
+  try {
+    const res = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, run_id: state.runId }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const answer = await res.json();
+    appendAskMessage('agent', answer.answer, answer.model);
+  } catch (err) {
+    appendAskMessage('agent', `I could not answer that request (${err.message}).`, 'error');
+  }
+}
+
+function appendAskMessage(role, text, model) {
+  const el = document.getElementById('ask-messages');
+  const div = document.createElement('div');
+  div.className = role === 'user'
+    ? 'ml-8 rounded-lg bg-brand-500 text-white p-3'
+    : 'mr-8 rounded-lg bg-surface-700 border border-surface-600 text-gray-200 p-3';
+  div.innerHTML = `
+    <p>${escHtml(text)}</p>
+    ${role === 'agent' ? `<p class="text-[11px] text-gray-500 mt-2">AI-generated — requires human review · ${escHtml(model || state.appStatus?.gemini_model || 'Gemini 3.x')}</p>` : ''}
+  `;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility helpers
 // ─────────────────────────────────────────────────────────────────────────────
 function escHtml(s) {
   if (s == null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escAttr(s) {
+  return escHtml(s).replace(/'/g,'&#39;');
+}
+
+function toolChipClass(label) {
+  const s = String(label || '').toLowerCase();
+  if (s.includes('mongodb mcp')) return 'mongo';
+  if (s.includes('gemini') || s.includes('vertex')) return 'gemini';
+  if (s.includes('human')) return 'human';
+  return 'detector';
+}
+
+function statusLabel(status) {
+  return {
+    pending: 'Pending Human Approval',
+    approved: 'Approved by Auditor',
+    rejected: 'Rejected',
+  }[status] || status;
 }
 
 function fmtCurrency(n) {
@@ -597,9 +913,12 @@ function resetUI() {
   state.flaggedItems = [];
   state.atRisk = 0;
   state.rowDecisions = {};
+  state.itemStatuses = {};
   state.report = null;
   state.deptCounts = {};
   state.vendorFlags = {};
+  state.approvalLog = [];
+  state.selectedFindingId = null;
   state._lastPlan = '';
   if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
 
@@ -638,6 +957,10 @@ function resetUI() {
   document.getElementById('run-id-display').classList.add('hidden');
   document.getElementById('run-status-badge').classList.add('hidden');
   document.getElementById('run-status-badge').classList.remove('flex');
+  renderFindingsView();
+  renderReportsView();
+  renderApprovalLog();
+  seedBaselineKpis();
 
   // Reset launch btn
   const btn = document.getElementById('launch-btn');

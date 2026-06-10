@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 from typing import AsyncIterator, Protocol, runtime_checkable
 
+from faultaudit.agent import roster
 from faultaudit.models import (
     AgentEvent,
     ApprovalDecision,
@@ -107,8 +108,8 @@ class FakeRunner:
             return AgentEvent(run_id=run_id, type=etype, data=dict(data))
 
         # --- Gate 1: PLAN ---
-        yield _evt(EventType.PLAN, plan=f"Audit plan for: {mission.text}")
-        yield _evt(EventType.AWAITING_APPROVAL, gate=ApprovalGate.PLAN.value)
+        yield _evt(EventType.PLAN, plan=f"Audit plan for: {mission.text}", **roster.MISSION_PLANNING)
+        yield _evt(EventType.AWAITING_APPROVAL, gate=ApprovalGate.PLAN.value, **roster.HUMAN_GATE)
 
         # Wait for plan approval
         await self._wait_for_decision(run_id)
@@ -119,22 +120,24 @@ class FakeRunner:
             return
 
         # --- Tool execution ---
-        yield _evt(EventType.TOOL_CALL, tool="vector_search", query=mission.text)
-        yield _evt(EventType.TOOL_RESULT, tool="vector_search", hits=5, top_score=0.97)
-        yield _evt(EventType.TOOL_CALL, tool="aggregate", bucket="vendor_month")
+        yield _evt(EventType.TOOL_CALL, tool="vector_search", query=mission.text, **roster.VECTOR_SEARCH)
+        yield _evt(EventType.TOOL_RESULT, tool="vector_search", hits=5, top_score=0.97, **roster.VECTOR_SEARCH)
+        yield _evt(EventType.TOOL_CALL, tool="aggregate", bucket="vendor_month", **roster.SPEND_ANALYSIS)
         yield _evt(
             EventType.TOOL_RESULT,
             tool="aggregate",
             count=3,
             total=12500.0,
+            **roster.SPEND_ANALYSIS,
         )
 
         # --- Gate 2: PROPOSAL ---
         yield _evt(
             EventType.PROPOSAL,
             items=[item.model_dump(mode="json") for item in _FAKE_ITEMS],
+            **roster.RISK_TRIAGE,
         )
-        yield _evt(EventType.AWAITING_APPROVAL, gate=ApprovalGate.ACTION.value)
+        yield _evt(EventType.AWAITING_APPROVAL, gate=ApprovalGate.ACTION.value, **roster.HUMAN_GATE)
 
         # Wait for action approval
         await self._wait_for_decision(run_id)
@@ -147,7 +150,7 @@ class FakeRunner:
         approved_items = [i for i in _FAKE_ITEMS if i.invoice_id in approved_ids]
 
         # --- Write & finish ---
-        yield _evt(EventType.WRITTEN, flagged=len(approved_items))
+        yield _evt(EventType.WRITTEN, flagged=len(approved_items), **roster.AUDIT_TRAIL)
 
         report = AuditReport(
             run_id=run_id,
@@ -163,6 +166,7 @@ class FakeRunner:
             flagged_count=report.flagged_count,
             total_at_risk=report.total_at_risk,
             report=report.model_dump(mode="json"),
+            **roster.REPORT_GENERATION,
         )
         yield _evt(EventType.DONE)
 

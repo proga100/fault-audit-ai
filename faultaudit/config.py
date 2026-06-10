@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     # --- mock switch ---
     use_mocks: bool = True  # tests + local dev default; flip to false with real creds
+    use_adk: bool = True    # live default: Google ADK / Agent Builder multi-agent runtime
 
     # --- MongoDB ---
     atlas_uri: str = ""

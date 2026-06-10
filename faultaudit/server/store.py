@@ -19,11 +19,11 @@ from faultaudit.models import (
     AuditReport,
     MissionRequest,
 )
-from faultaudit.server.runner import FakeRunner
+from faultaudit.server.runner import AgentRunner
 
 
 class RunRecord:
-    def __init__(self, run_id: str, mission: MissionRequest, runner: FakeRunner) -> None:
+    def __init__(self, run_id: str, mission: MissionRequest, runner: AgentRunner) -> None:
         self.run_id = run_id
         self.mission = mission
         self.runner = runner
@@ -37,7 +37,7 @@ class RunStore:
     def __init__(self) -> None:
         self._runs: dict[str, RunRecord] = {}
 
-    def create_run(self, mission: MissionRequest, runner: FakeRunner) -> RunRecord:
+    def create_run(self, mission: MissionRequest, runner: AgentRunner) -> RunRecord:
         """Create a new run record and return it."""
         run_id = str(uuid.uuid4())
         record = RunRecord(run_id=run_id, mission=mission, runner=runner)
@@ -73,6 +73,12 @@ class RunStore:
         if record is None:
             return None
         return record.report
+
+    def newest_report(self) -> Optional[AuditReport]:
+        for record in reversed(list(self._runs.values())):
+            if record.report is not None:
+                return record.report
+        return None
 
 
 # Module-level singleton used by the FastAPI app.

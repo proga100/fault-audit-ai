@@ -24,10 +24,13 @@ from faultaudit.models import (
     AgentEvent,
     ApprovalDecision,
     AuditReport,
+    AskRequest,
+    AskResponse,
     EventType,
     MissionRequest,
     MissionStarted,
 )
+from faultaudit.server import insights
 from faultaudit.server.events import to_sse
 from faultaudit.server.runner import FakeRunner
 from faultaudit.config import get_settings
@@ -104,6 +107,23 @@ def healthz() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/api/status")
+def status() -> dict:
+    return insights.get_status()
+
+
+@app.get("/api/stats")
+def stats() -> dict:
+    return insights.get_stats()
+
+
+@app.post("/api/ask", response_model=AskResponse)
+def ask(body: AskRequest) -> AskResponse:
+    store = _get_store()
+    report = store.get_report(body.run_id) if body.run_id else store.newest_report()
+    return insights.answer_question(body.question, report)
+
+
 @app.post("/api/mission", response_model=MissionStarted)
 async def start_mission(body: MissionRequest) -> MissionStarted:
     """Start a new audit mission. Returns a run_id immediately.
@@ -112,8 +132,13 @@ async def start_mission(body: MissionRequest) -> MissionStarted:
     run's queue, which the /api/events/{run_id} SSE stream consumes.
     """
     store = _get_store()
-    if get_settings().use_mocks:
+    settings = get_settings()
+    if settings.use_mocks:
         runner = FakeRunner()
+    elif settings.use_adk:
+        from faultaudit.server.adk_runner import AdkAgentRunner
+
+        runner = AdkAgentRunner()
     else:
         from faultaudit.server.real_runner import RealRunner
 

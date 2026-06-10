@@ -106,6 +106,46 @@ async def test_healthz(client: AsyncClient) -> None:
     assert resp.json() == {"status": "ok"}
 
 
+@pytest.mark.anyio
+async def test_status_exposes_runtime_and_gemini_model(client: AsyncClient) -> None:
+    resp = await client.get("/api/status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["agent_runtime"] == "mock"
+    assert body["gemini_model"].startswith("gemini-3.")
+    assert body["human_approval"] is True
+    assert body["audit_trail"] is True
+
+
+@pytest.mark.anyio
+async def test_stats_shape(client: AsyncClient) -> None:
+    resp = await client.get("/api/stats")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["invoices"] > 0
+    assert body["vendors"] > 0
+    assert body["total_spend"] > 0
+    assert body["source"]
+
+
+@pytest.mark.anyio
+async def test_ask_demo_mode_returns_grounded_answer(client: AsyncClient) -> None:
+    resp = await client.post("/api/ask", json={"question": "What is in scope?"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ai_generated"] is True
+    assert body["model"] == "demo-template"
+    assert "dataset in scope" in body["answer"].lower()
+
+
+@pytest.mark.anyio
+async def test_ask_validation(client: AsyncClient) -> None:
+    empty = await client.post("/api/ask", json={"question": ""})
+    assert empty.status_code == 422
+    too_long = await client.post("/api/ask", json={"question": "x" * 2001})
+    assert too_long.status_code == 422
+
+
 # --------------------------------------------------------------------------- #
 # Test: POST /api/mission returns a run_id
 # --------------------------------------------------------------------------- #
@@ -215,6 +255,10 @@ async def test_full_event_sequence_via_queue(store: RunStore) -> None:
 
     # Ensure DONE is last.
     assert types[-1] == EventType.DONE
+
+    attributed = [e for e in events_so_far if e.type != EventType.DONE]
+    assert all("agent" in e.data for e in attributed)
+    assert all("tool_label" in e.data for e in attributed)
 
 
 # --------------------------------------------------------------------------- #

@@ -158,4 +158,20 @@ class MissionStarted(BaseModel):
     run_id: str
 
 
+# --------------------------------------------------------------------------- #
+# AI Audit Assistant (the "Ask Audit Agent" drawer)
+# --------------------------------------------------------------------------- #
+class AskRequest(BaseModel):
+    """A question for the AI Audit Assistant, optionally scoped to a run."""
+
+    question: str = Field(min_length=1, max_length=2000)
+    run_id: Optional[str] = None
+
+
+class AskResponse(BaseModel):
+    answer: str
+    model: str
+    ai_generated: bool = True  # the UI must surface this — answers need human review
+
+
 RunStatus = Literal["planning", "awaiting_plan", "executing", "awaiting_action", "writing", "done", "error"]
