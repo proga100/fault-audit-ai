@@ -28,6 +28,27 @@
 .prompt-chip { font-size: 12px; cursor: pointer; }
 .prompt-chip:hover { border-color: #3b82f6; color: #bfdbfe; }
 
+.invoice-link {
+  color: #93c5fd;
+  text-decoration: none;
+  text-align: left;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.invoice-link:hover {
+  color: #dbeafe;
+  background: rgba(59,130,246,0.12);
+}
+.invoice-preview-frame {
+  width: 100%;
+  height: 420px;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .finding-row { cursor: pointer; }
 .finding-row:hover { background: rgba(33,38,45,0.75); }
 .finding-row.active { background: rgba(37,99,235,0.12); }
@@ -62,6 +83,7 @@
 .timeline-card {
   border-left: 2px solid transparent;
   transition: border-color 0.2s;
+  padding: 9px 10px 9px 12px !important;
 }
 .timeline-card:hover { border-left-color: #3b82f6; }
 .timeline-card.type-plan       { border-left-color: #3b82f6; }
@@ -133,10 +155,10 @@
 
 /* Step number badge */
 .step-badge {
-  width: 20px; height: 20px;
+  width: 18px; height: 18px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700;
+  font-size: 9px; font-weight: 700;
   flex-shrink: 0;
 }
 
