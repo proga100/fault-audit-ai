@@ -16,3 +16,7 @@ sdn.csv
 
 # private working docs / Claude context (not for the public repo)
 .claude/
+
+# GCP service-account key (SECRET — never commit)
+gcp-key.json
+*-key.json

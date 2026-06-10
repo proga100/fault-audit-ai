@@ -30,6 +30,7 @@ from faultaudit.models import (
 )
 from faultaudit.server.events import to_sse
 from faultaudit.server.runner import FakeRunner
+from faultaudit.config import get_settings
 from faultaudit.server.store import RunStore, run_store as _default_store
 
 app = FastAPI(title="FaultAuditAI")
@@ -111,7 +112,12 @@ async def start_mission(body: MissionRequest) -> MissionStarted:
     run's queue, which the /api/events/{run_id} SSE stream consumes.
     """
     store = _get_store()
-    runner = FakeRunner()
+    if get_settings().use_mocks:
+        runner = FakeRunner()
+    else:
+        from faultaudit.server.real_runner import RealRunner
+
+        runner = RealRunner()  # live: Gemini + Atlas vector search
     record = store.create_run(body, runner)
     asyncio.create_task(_run_mission(record.run_id, store))
     return MissionStarted(run_id=record.run_id)

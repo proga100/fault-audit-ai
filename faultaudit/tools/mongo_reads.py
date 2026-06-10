@@ -35,9 +35,31 @@ def vector_search_transactions(
 ) -> list[dict]:
     """$vectorSearch over transactions.embedding. Each result dict includes 'score'.
 
-    Under mongomock there is no $vectorSearch, so the test/mock path falls back to
-    brute-force cosine over stored embeddings (config.use_mocks drives this).
+    Real Atlas path (use_mocks=false) issues a true `$vectorSearch` against the Atlas
+    Vector Search index. Mock/test path (mongomock, no $vectorSearch) falls back to
+    brute-force cosine over stored embeddings.
     """
+    from faultaudit.config import get_settings
+
+    settings = get_settings()
+    if not settings.use_mocks:
+        vs: dict[str, Any] = {
+            "index": settings.vector_index_name,
+            "path": "embedding",
+            "queryVector": query_vector,
+            "numCandidates": max(100, k * 15),
+            "limit": k,
+        }
+        if filters:
+            vs["filter"] = filters
+        pipeline = [
+            {"$vectorSearch": vs},
+            {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
+            {"$project": {"_id": 0, "embedding": 0}},
+        ]
+        return list(db.transactions.aggregate(pipeline))
+
+    # --- mock / brute-force path ---
     query = filters or {}
     docs = list(db.transactions.find(query, {"_id": 0}))
 
