@@ -153,22 +153,20 @@
           <span class="ml-auto text-xs text-orange-400/70 font-mono">awaiting_approval</span>
         </div>
         <div class="p-4">
-          <p class="text-xs text-gray-400 mb-3 uppercase tracking-wide font-medium">Flagged items — review &amp; approve:</p>
+          <p id="flagged-caption" class="text-xs text-gray-400 mb-3 uppercase tracking-wide font-medium">Flagged items — review &amp; approve:</p>
 
           <!-- Flagged items table -->
-          <div class="overflow-x-auto rounded-lg border border-surface-600">
+          <div class="rounded-lg border border-surface-600 max-h-[44vh] overflow-y-auto">
             <table class="w-full text-xs">
-              <thead>
+              <thead class="sticky top-0 z-10">
                 <tr class="bg-surface-700 border-b border-surface-600">
-                  <th class="px-3 py-2 text-left text-gray-400 font-medium">
+                  <th class="px-2 py-2 text-left text-gray-400 font-medium">
                     <input type="checkbox" id="select-all-cb" onchange="toggleSelectAll(this)" class="rounded border-surface-500" />
                   </th>
-                  <th class="px-3 py-2 text-left text-gray-400 font-medium">Invoice</th>
-                  <th class="px-3 py-2 text-left text-gray-400 font-medium">Vendor</th>
-                  <th class="px-3 py-2 text-left text-gray-400 font-medium">Dept</th>
-                  <th class="px-3 py-2 text-right text-gray-400 font-medium">Amount</th>
-                  <th class="px-3 py-2 text-left text-gray-400 font-medium">Flags</th>
-                  <th class="px-3 py-2 text-center text-gray-400 font-medium">Action</th>
+                  <th class="px-2 py-2 text-left text-gray-400 font-medium">Vendor</th>
+                  <th class="px-2 py-2 text-right text-gray-400 font-medium">Amount</th>
+                  <th class="px-2 py-2 text-left text-gray-400 font-medium">Flags</th>
+                  <th class="px-2 py-2 text-center text-gray-400 font-medium">OK?</th>
                 </tr>
               </thead>
               <tbody id="flagged-items-tbody" class="divide-y divide-surface-700">
@@ -177,8 +175,8 @@
           </div>
 
           <div class="flex gap-2 mt-3">
-            <button onclick="approveAll()" class="flex-1 py-2 rounded-lg bg-accent-green/20 border border-accent-green/40 text-accent-green text-sm font-semibold hover:bg-accent-green/30 transition-colors">Approve All</button>
-            <button onclick="submitActionDecision()" class="flex-1 py-2 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-400 transition-colors">Write Approved</button>
+            <button onclick="submitActionDecision()" class="flex-[2] py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-400 transition-colors">✓ Approve &amp; Write</button>
+            <button onclick="rejectAllAction()" class="flex-1 py-2.5 rounded-lg bg-surface-700 border border-surface-600 text-gray-300 text-sm font-medium hover:bg-surface-600 transition-colors">Reject All</button>
           </div>
         </div>
       </div>

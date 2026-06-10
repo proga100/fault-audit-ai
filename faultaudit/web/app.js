@@ -140,22 +140,24 @@ function handleProposal(evt) {
   const items = evt.data?.items || [];
   state.flaggedItems = items;
 
-  // Tally at-risk + dept/vendor stats
-  items.forEach(item => {
-    state.atRisk += (item.amount || 0);
-    const dept = item.department || 'Unknown';
-    state.deptCounts[dept] = (state.deptCounts[dept] || 0) + 1;
-    const vendor = item.vendor_name || 'Unknown';
-    state.vendorFlags[vendor] = (state.vendorFlags[vendor] || 0) + 1;
-
-    // default: approve
-    state.rowDecisions[item.invoice_id] = 'approve';
-  });
+  // Dashboard reflects ALL flagged (server aggregates); table shows the top N for review.
+  const total = evt.data?.total_flagged ?? items.length;
+  state.atRisk = evt.data?.total_at_risk ?? items.reduce((s, i) => s + (i.amount || 0), 0);
+  state.deptCounts = evt.data?.dept_counts || {};
+  state.vendorFlags = evt.data?.vendor_counts || {};
+  items.forEach(item => { state.rowDecisions[item.invoice_id] = 'approve'; });
 
   animateKPICurrency('kpi-at-risk', state.atRisk);
-  animateKPI('kpi-flags', items.length);
+  animateKPI('kpi-flags', total);
   renderDeptChart();
   renderVendorChart();
+
+  const caption = document.getElementById('flagged-caption');
+  if (caption) {
+    caption.textContent = total > items.length
+      ? `Top ${items.length} of ${total} flagged — review & approve:`
+      : `${items.length} flagged items — review & approve:`;
+  }
 
   appendTimelineCard('proposal', evt.data);
 }
@@ -318,17 +320,19 @@ function renderFlaggedTable() {
     const reasons = (item.reasons || []).map(r =>
       `<span class="reason-chip ${r}">${r.replace(/_/g,' ')}</span>`
     ).join(' ');
+    const shortId = escHtml(String(item.invoice_id).slice(0, 8));
 
     tr.innerHTML = `
-      <td class="px-3 py-2">
+      <td class="px-2 py-2">
         <input type="checkbox" class="item-cb rounded border-surface-500" data-id="${escHtml(item.invoice_id)}" checked onchange="handleCbChange(this)" />
       </td>
-      <td class="px-3 py-2 font-mono text-xs text-brand-300">${escHtml(item.invoice_id)}</td>
-      <td class="px-3 py-2 text-xs text-gray-300 max-w-[120px] truncate" title="${escHtml(item.vendor_name)}">${escHtml(item.vendor_name)}</td>
-      <td class="px-3 py-2 text-xs text-gray-400">${escHtml(item.department)}</td>
-      <td class="px-3 py-2 text-xs text-right font-mono font-semibold text-accent-red">${fmtCurrency(item.amount)}</td>
-      <td class="px-3 py-2 text-xs">${reasons}</td>
-      <td class="px-3 py-2 text-center">
+      <td class="px-2 py-2 text-xs text-gray-200 max-w-[130px] truncate" title="${escHtml(item.vendor_name)}">
+        ${escHtml(item.vendor_name)}
+        <span class="block font-mono text-[10px] text-gray-500">${shortId} · ${escHtml(item.department)}</span>
+      </td>
+      <td class="px-2 py-2 text-xs text-right font-mono font-semibold text-accent-red whitespace-nowrap">${fmtCurrency(item.amount)}</td>
+      <td class="px-2 py-2"><div class="flex flex-wrap gap-1 max-w-[150px]">${reasons}</div></td>
+      <td class="px-2 py-2 text-center">
         <div class="flex gap-1 justify-center">
           <button class="row-decision-btn approve active" data-id="${escHtml(item.invoice_id)}" data-action="approve" onclick="setRowDecision(this,'approve')">✓</button>
           <button class="row-decision-btn reject" data-id="${escHtml(item.invoice_id)}" data-action="reject" onclick="setRowDecision(this,'reject')">✕</button>
@@ -380,6 +384,7 @@ function toggleSelectAll(masterCb) {
 function approveAll() {
   document.getElementById('select-all-cb').checked = true;
   toggleSelectAll(document.getElementById('select-all-cb'));
+  submitActionDecision();   // one click: select all + write
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -409,8 +414,14 @@ async function submitActionDecision() {
     if (dec === 'approve') approvedIds.push(id);
     else rejectedIds.push(id);
   });
+  setStatusBadge('executing', 'Writing…');
   await postApproval({ gate: 'action', approved: true, approved_ids: approvedIds, rejected_ids: rejectedIds });
   document.getElementById('gate-action').classList.add('hidden');
+}
+
+function rejectAllAction() {
+  state.flaggedItems.forEach(it => { state.rowDecisions[it.invoice_id] = 'reject'; });
+  submitActionDecision();
 }
 
 async function postApproval(decision) {

@@ -39,6 +39,14 @@ from faultaudit.tools.policy import check_policy
 
 BUSINESS_START, BUSINESS_END = 8, 18
 VECTOR_SIMILAR_MIN = 0.80  # surface vector hits at/above this score as VECTOR_SIMILAR
+MAX_FLAGGED = 40  # cap: a human reviews exceptions, not hundreds of rows
+HIGH_SIGNAL = {
+    FlaggedReason.OFAC_HIT,
+    FlaggedReason.GHOST_VENDOR,
+    FlaggedReason.DUPLICATE,
+    FlaggedReason.NEAR_DUPLICATE,
+    FlaggedReason.VECTOR_SIMILAR,
+}
 
 
 class RealRunner:
@@ -58,8 +66,18 @@ class RealRunner:
 
         db = self._db
 
-        # --- Gate 1: Gemini-authored plan ---
-        plan = await asyncio.to_thread(llm.plan_for, mission.text)
+        # --- Gate 1: Gemini-authored plan (timeout-guarded so it can't hang) ---
+        _PLAN_FALLBACK = (
+            "1. Vector-search transactions similar to known fraud patterns.\n"
+            "2. Aggregate spend by department.\n"
+            "3. Check policy limits, duplicates, ghost vendors, off-hours.\n"
+            "4. Screen payees against sanctions.\n"
+            "5. Propose a flagged list for your approval."
+        )
+        try:
+            plan = await asyncio.wait_for(asyncio.to_thread(llm.plan_for, mission.text), timeout=30)
+        except (asyncio.TimeoutError, Exception):
+            plan = _PLAN_FALLBACK
         yield evt(EventType.PLAN, plan=plan)
         yield evt(EventType.AWAITING_APPROVAL, gate=ApprovalGate.PLAN.value)
         await self._wait(run_id)
@@ -85,15 +103,36 @@ class RealRunner:
         yield evt(EventType.TOOL_RESULT, tool="mongodb.aggregate",
                   by_department=sorted(spend, key=lambda s: s["total"], reverse=True))
 
-        # --- Assemble flagged list (fast detectors + vector hits) ---
-        items = await asyncio.to_thread(self._assemble, db, hits)
-        yield evt(EventType.PROPOSAL, items=[i.model_dump(mode="json") for i in items])
+        # --- Assemble flagged list (fast detectors + vector hits), cap for review ---
+        all_items = await asyncio.to_thread(self._assemble, db, hits)
+        items = all_items[:MAX_FLAGGED]
+        dept_counts: dict[str, int] = defaultdict(int)
+        vendor_counts: dict[str, int] = defaultdict(int)
+        for it in all_items:
+            dept_counts[it.department] += 1
+            vendor_counts[it.vendor_name] += 1
+        yield evt(
+            EventType.PROPOSAL,
+            items=[i.model_dump(mode="json") for i in items],
+            total_flagged=len(all_items),
+            shown=len(items),
+            total_at_risk=sum(i.amount for i in all_items),
+            dept_counts=dict(dept_counts),
+            vendor_counts=dict(vendor_counts),
+        )
         yield evt(EventType.AWAITING_APPROVAL, gate=ApprovalGate.ACTION.value)
         await self._wait(run_id)
         decision = self._decisions.pop(run_id)
 
-        approved_ids = decision.approved_ids or [i.invoice_id for i in items]
-        approved = [i for i in items if i.invoice_id in set(approved_ids)]
+        # approve set: explicit approves win; else all-minus-rejected; else all shown
+        proposed = {i.invoice_id for i in items}
+        if decision.approved_ids:
+            keep = set(decision.approved_ids) & proposed
+        elif decision.rejected_ids:
+            keep = proposed - set(decision.rejected_ids)
+        else:
+            keep = proposed
+        approved = [i for i in items if i.invoice_id in keep]
 
         # --- Gated write to Atlas ---
         from faultaudit.tools.flagging import mark_flagged
@@ -104,9 +143,14 @@ class RealRunner:
         # --- Report (Gemini narrative + structured) ---
         report = render_report(run_id, mission.text, approved)
         reasons = [r.value for it in approved for r in it.reasons]
-        narrative = await asyncio.to_thread(
-            llm.summarize, mission.text, report.flagged_count, report.total_at_risk, reasons
-        )
+        try:
+            narrative = await asyncio.wait_for(
+                asyncio.to_thread(llm.summarize, mission.text, report.flagged_count, report.total_at_risk, reasons),
+                timeout=30,
+            )
+        except (asyncio.TimeoutError, Exception):
+            narrative = (f"Flagged {report.flagged_count} transactions totalling "
+                         f"${report.total_at_risk:,.0f} at risk across {len(set(reasons))} risk types.")
         report.markdown = f"# Audit Report\n\n{narrative}\n\n" + report.markdown
         yield evt(EventType.REPORT_READY, run_id=run_id, flagged_count=report.flagged_count,
                   total_at_risk=report.total_at_risk, report=report.model_dump(mode="json"))
@@ -170,5 +214,10 @@ class RealRunner:
                 amount=inv.amount, reasons=sorted(rset, key=lambda r: r.value),
                 similarity=sims.get(iid), detail="; ".join(details[iid]),
             ))
-        items.sort(key=lambda it: it.amount, reverse=True)
-        return items
+        # Prioritise: high-signal fraud first, then by # of distinct reasons, then $.
+        def _priority(it: FlaggedItem):
+            high = len(set(it.reasons) & HIGH_SIGNAL)
+            return (high > 0, high, len(it.reasons), it.amount)
+
+        items.sort(key=_priority, reverse=True)
+        return items  # full sorted list; caller caps and reports the total
