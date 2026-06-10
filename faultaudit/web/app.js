@@ -1,0 +1,674 @@
+/* FaultAuditAI — Frontend application
+ * Talks to: POST /api/mission, GET /api/events/:run_id (SSE), POST /api/approve/:run_id, GET /api/report/:run_id
+ */
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+const state = {
+  runId: null,
+  eventSource: null,
+  stepCount: 0,
+  flaggedItems: [],      // current FlaggedItem[]
+  atRisk: 0,
+  rowDecisions: {},      // invoice_id -> 'approve' | 'reject'
+  report: null,
+  deptCounts: {},
+  vendorFlags: {},
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Template buttons
+// ─────────────────────────────────────────────────────────────────────────────
+function setTemplate(btn) {
+  document.getElementById('mission-input').value = btn.dataset.text;
+  document.querySelectorAll('.template-btn').forEach(b => b.classList.remove('border-brand-400','text-brand-300'));
+  btn.classList.add('border-brand-400','text-brand-300');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Launch mission
+// ─────────────────────────────────────────────────────────────────────────────
+async function launchMission() {
+  const text = document.getElementById('mission-input').value.trim();
+  if (!text) { flashInput(); return; }
+
+  resetUI();
+
+  const btn = document.getElementById('launch-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div><span>Starting…</span>';
+
+  try {
+    const res = await fetch('/api/mission', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { run_id } = await res.json();
+    state.runId = run_id;
+
+    document.getElementById('run-id-val').textContent = run_id.slice(0, 8);
+    document.getElementById('run-id-display').classList.remove('hidden');
+    document.getElementById('timeline-empty').classList.add('hidden');
+    setStatusBadge('planning', 'Planning…');
+    startSSE(run_id);
+  } catch (err) {
+    appendTimelineCard('error', { message: err.message });
+    btn.disabled = false;
+    btn.innerHTML = '<span>Run Audit Mission</span>';
+  }
+}
+
+function flashInput() {
+  const el = document.getElementById('mission-input');
+  el.classList.add('ring-1','ring-accent-red','border-accent-red');
+  setTimeout(() => el.classList.remove('ring-1','ring-accent-red','border-accent-red'), 1200);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SSE
+// ─────────────────────────────────────────────────────────────────────────────
+function startSSE(runId) {
+  if (state.eventSource) state.eventSource.close();
+  const es = new EventSource(`/api/events/${runId}`);
+  state.eventSource = es;
+
+  // Generic message handler — server may send named events or plain 'message'
+  es.onmessage = (e) => handleRawEvent(e.data);
+
+  // Named event handlers (server can send `event: plan` etc.)
+  const eventTypes = ['plan','tool_call','tool_result','proposal','awaiting_approval','written','report_ready','error','done'];
+  eventTypes.forEach(type => {
+    es.addEventListener(type, (e) => handleRawEvent(e.data, type));
+  });
+
+  es.onerror = () => {
+    setStatusBadge('error', 'Disconnected');
+  };
+}
+
+function handleRawEvent(dataStr, forcedType) {
+  let evt;
+  try { evt = JSON.parse(dataStr); } catch { return; }
+  const type = forcedType || evt.type;
+  dispatchEvent(type, evt);
+}
+
+function dispatchEvent(type, evt) {
+  switch (type) {
+    case 'plan':              handlePlan(evt); break;
+    case 'tool_call':         handleToolCall(evt); break;
+    case 'tool_result':       handleToolResult(evt); break;
+    case 'proposal':          handleProposal(evt); break;
+    case 'awaiting_approval': handleAwaitingApproval(evt); break;
+    case 'written':           handleWritten(evt); break;
+    case 'report_ready':      handleReportReady(evt); break;
+    case 'error':             handleError(evt); break;
+    case 'done':              handleDone(evt); break;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Event handlers
+// ─────────────────────────────────────────────────────────────────────────────
+function handlePlan(evt) {
+  setStatusBadge('planning', 'Plan received');
+  const plan = evt.data?.plan || evt.data?.text || JSON.stringify(evt.data);
+  appendTimelineCard('plan', { plan });
+}
+
+function handleToolCall(evt) {
+  setStatusBadge('executing', 'Executing…');
+  appendTimelineCard('tool_call', evt.data);
+}
+
+function handleToolResult(evt) {
+  appendTimelineCard('tool_result', evt.data);
+
+  // Update KPI: vendors checked
+  if (evt.data?.count != null) {
+    animateKPI('kpi-vendors', evt.data.count);
+  }
+  if (evt.data?.vendor_count != null) {
+    animateKPI('kpi-vendors', evt.data.vendor_count);
+  }
+}
+
+function handleProposal(evt) {
+  const items = evt.data?.items || [];
+  state.flaggedItems = items;
+
+  // Dashboard reflects ALL flagged (server aggregates); table shows the top N for review.
+  const total = evt.data?.total_flagged ?? items.length;
+  state.atRisk = evt.data?.total_at_risk ?? items.reduce((s, i) => s + (i.amount || 0), 0);
+  state.deptCounts = evt.data?.dept_counts || {};
+  state.vendorFlags = evt.data?.vendor_counts || {};
+  items.forEach(item => { state.rowDecisions[item.invoice_id] = 'approve'; });
+
+  animateKPICurrency('kpi-at-risk', state.atRisk);
+  animateKPI('kpi-flags', total);
+  renderDeptChart();
+  renderVendorChart();
+
+  const caption = document.getElementById('flagged-caption');
+  if (caption) {
+    caption.textContent = total > items.length
+      ? `Top ${items.length} of ${total} flagged — review & approve:`
+      : `${items.length} flagged items — review & approve:`;
+  }
+
+  appendTimelineCard('proposal', evt.data);
+}
+
+function handleAwaitingApproval(evt) {
+  const gate = evt.data?.gate;
+  setStatusBadge('awaiting', `Awaiting ${gate} approval`);
+
+  if (gate === 'plan') {
+    const plan = evt.data?.plan || state._lastPlan || '';
+    document.getElementById('plan-text').textContent = plan;
+    document.getElementById('plan-edit-input').value = plan;
+    document.getElementById('gate-plan').classList.remove('hidden');
+    scrollTimeline();
+  } else if (gate === 'action') {
+    renderFlaggedTable();
+    document.getElementById('gate-action').classList.remove('hidden');
+    scrollTimeline();
+  }
+  appendTimelineCard('awaiting_approval', evt.data);
+}
+
+function handleWritten(evt) {
+  setStatusBadge('executing', 'Writing…');
+  document.getElementById('gate-action').classList.add('hidden');
+  appendTimelineCard('written', evt.data);
+}
+
+async function handleReportReady(evt) {
+  setStatusBadge('done', 'Report ready');
+  appendTimelineCard('report_ready', evt.data);
+  // Fetch the actual report
+  try {
+    const res = await fetch(`/api/report/${state.runId}`);
+    if (res.ok) {
+      state.report = await res.json();
+      renderReport(state.report);
+    }
+  } catch {}
+}
+
+function handleError(evt) {
+  setStatusBadge('error', 'Error');
+  appendTimelineCard('error', evt.data);
+  const btn = document.getElementById('launch-btn');
+  btn.disabled = false;
+  btn.innerHTML = 'Run Audit Mission';
+}
+
+function handleDone(evt) {
+  setStatusBadge('done', 'Done');
+  appendTimelineCard('done', evt.data);
+  if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
+  const btn = document.getElementById('launch-btn');
+  btn.disabled = false;
+  btn.innerHTML = 'Run Audit Mission';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Timeline card renderer
+// ─────────────────────────────────────────────────────────────────────────────
+const TYPE_META = {
+  plan:              { icon: '📋', label: 'Plan',          badge: 'bg-blue-900/40 text-blue-300 border-blue-700/40' },
+  tool_call:         { icon: '⚙️', label: 'Tool Call',     badge: 'bg-purple-900/40 text-purple-300 border-purple-700/40' },
+  tool_result:       { icon: '📊', label: 'Tool Result',   badge: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/40' },
+  proposal:          { icon: '🚩', label: 'Proposal',      badge: 'bg-orange-900/40 text-orange-300 border-orange-700/40' },
+  awaiting_approval: { icon: '⏸', label: 'Awaiting',      badge: 'bg-yellow-900/40 text-yellow-300 border-yellow-700/40' },
+  written:           { icon: '✅', label: 'Written',        badge: 'bg-green-900/40 text-green-300 border-green-700/40' },
+  report_ready:      { icon: '📄', label: 'Report Ready',  badge: 'bg-green-900/40 text-green-300 border-green-700/40' },
+  error:             { icon: '❌', label: 'Error',          badge: 'bg-red-900/40 text-red-300 border-red-700/40' },
+  done:              { icon: '🏁', label: 'Done',           badge: 'bg-green-900/40 text-green-300 border-green-700/40' },
+};
+
+function appendTimelineCard(type, data) {
+  state.stepCount++;
+  const meta = TYPE_META[type] || { icon:'•', label: type, badge: 'bg-surface-700 text-gray-400 border-surface-500' };
+
+  const card = document.createElement('div');
+  card.className = `timeline-card type-${type} fade-in rounded-lg bg-surface-800 border border-surface-600 p-3 pl-4`;
+
+  let bodyHtml = '';
+
+  if (type === 'plan') {
+    const planText = data?.plan || data?.text || '';
+    state._lastPlan = planText;
+    bodyHtml = planText
+      ? `<p class="text-xs text-gray-300 font-mono whitespace-pre-wrap mt-1 leading-relaxed">${escHtml(planText)}</p>`
+      : '';
+  } else if (type === 'tool_call') {
+    const tool = data?.tool_name || data?.name || 'unknown';
+    const args = data?.args || data?.input || {};
+    bodyHtml = `
+      <span class="text-xs font-mono text-purple-300 font-semibold">${escHtml(tool)}</span>
+      ${Object.keys(args).length ? `<pre class="text-xs text-gray-500 font-mono mt-1 bg-surface-700/50 rounded p-2 overflow-x-auto">${escHtml(JSON.stringify(args, null, 2))}</pre>` : ''}
+    `;
+  } else if (type === 'tool_result') {
+    const tool = data?.tool_name || data?.name || '';
+    const count = data?.count ?? data?.hit_count ?? data?.total ?? null;
+    const scores = data?.similarity_scores || data?.scores || [];
+    let scoreHtml = '';
+    if (scores.length) {
+      scoreHtml = `<div class="mt-2 space-y-1">
+        ${scores.slice(0,5).map((s,i) => `
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-500 w-4">${i+1}</span>
+            <div class="sim-bar-track flex-1"><div class="sim-bar-fill bg-cyan-500" style="width:${Math.round(s*100)}%"></div></div>
+            <span class="text-xs text-gray-400 w-8 text-right">${(s*100).toFixed(0)}%</span>
+          </div>`).join('')}
+        ${scores.length > 5 ? `<p class="text-xs text-gray-600">+${scores.length-5} more</p>` : ''}
+      </div>`;
+    }
+    bodyHtml = `
+      ${tool ? `<span class="text-xs font-mono text-cyan-300">${escHtml(tool)}</span>` : ''}
+      ${count != null ? `<span class="ml-2 text-xs text-gray-400">${count} hit${count !== 1 ? 's' : ''}</span>` : ''}
+      ${scoreHtml}
+    `;
+  } else if (type === 'proposal') {
+    const items = data?.items || [];
+    bodyHtml = `<p class="text-xs text-gray-300 mt-1">${items.length} suspicious invoice${items.length !== 1 ? 's' : ''} identified.</p>`;
+  } else if (type === 'awaiting_approval') {
+    const gate = data?.gate || '';
+    bodyHtml = `<p class="text-xs text-yellow-300/80 mt-1">Gate <span class="font-mono font-semibold">${escHtml(gate)}</span> — action required above</p>`;
+  } else if (type === 'written') {
+    const n = data?.written_count ?? data?.count ?? '';
+    bodyHtml = n !== '' ? `<p class="text-xs text-green-300/80 mt-1">${n} item${n !== 1 ? 's' : ''} committed to audit log.</p>` : '';
+  } else if (type === 'report_ready') {
+    bodyHtml = `<p class="text-xs text-green-300/80 mt-1">Audit report generated — see dashboard panel.</p>`;
+  } else if (type === 'error') {
+    const msg = data?.message || data?.error || JSON.stringify(data);
+    bodyHtml = `<p class="text-xs text-red-300 mt-1 font-mono">${escHtml(msg)}</p>`;
+  } else if (type === 'done') {
+    bodyHtml = `<p class="text-xs text-green-300/80 mt-1">Audit run complete.</p>`;
+  }
+
+  card.innerHTML = `
+    <div class="flex items-center gap-2 mb-0.5">
+      <span class="step-badge bg-surface-700 text-gray-400">${state.stepCount}</span>
+      <span class="px-1.5 py-0.5 rounded border text-xs font-semibold ${meta.badge}">${meta.label}</span>
+      <span class="ml-auto text-xs text-gray-600 font-mono">${tsNow()}</span>
+    </div>
+    ${bodyHtml}
+  `;
+
+  document.getElementById('timeline').appendChild(card);
+  scrollTimeline();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Flagged items table (Gate 2)
+// ─────────────────────────────────────────────────────────────────────────────
+function renderFlaggedTable() {
+  const tbody = document.getElementById('flagged-items-tbody');
+  tbody.innerHTML = '';
+
+  state.flaggedItems.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.className = 'bg-surface-800 hover:bg-surface-700/50 transition-colors';
+    tr.dataset.invoiceId = item.invoice_id;
+
+    const reasons = (item.reasons || []).map(r =>
+      `<span class="reason-chip ${r}">${r.replace(/_/g,' ')}</span>`
+    ).join(' ');
+    const shortId = escHtml(String(item.invoice_id).slice(0, 8));
+
+    tr.innerHTML = `
+      <td class="px-2 py-2">
+        <input type="checkbox" class="item-cb rounded border-surface-500" data-id="${escHtml(item.invoice_id)}" checked onchange="handleCbChange(this)" />
+      </td>
+      <td class="px-2 py-2 text-xs text-gray-200 max-w-[130px] truncate" title="${escHtml(item.vendor_name)}">
+        ${escHtml(item.vendor_name)}
+        <span class="block font-mono text-[10px] text-gray-500">${shortId} · ${escHtml(item.department)}</span>
+      </td>
+      <td class="px-2 py-2 text-xs text-right font-mono font-semibold text-accent-red whitespace-nowrap">${fmtCurrency(item.amount)}</td>
+      <td class="px-2 py-2"><div class="flex flex-wrap gap-1 max-w-[150px]">${reasons}</div></td>
+      <td class="px-2 py-2 text-center">
+        <div class="flex gap-1 justify-center">
+          <button class="row-decision-btn approve active" data-id="${escHtml(item.invoice_id)}" data-action="approve" onclick="setRowDecision(this,'approve')">✓</button>
+          <button class="row-decision-btn reject" data-id="${escHtml(item.invoice_id)}" data-action="reject" onclick="setRowDecision(this,'reject')">✕</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function setRowDecision(btn, decision) {
+  const id = btn.dataset.id;
+  state.rowDecisions[id] = decision;
+
+  // Update button active states in row
+  const row = btn.closest('tr');
+  row.querySelectorAll('.row-decision-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  // Sync checkbox
+  const cb = row.querySelector('.item-cb');
+  if (cb) cb.checked = (decision === 'approve');
+}
+
+function handleCbChange(cb) {
+  const id = cb.dataset.id;
+  const decision = cb.checked ? 'approve' : 'reject';
+  state.rowDecisions[id] = decision;
+  const row = cb.closest('tr');
+  row.querySelectorAll('.row-decision-btn').forEach(b => {
+    if (b.dataset.action === decision) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+}
+
+function toggleSelectAll(masterCb) {
+  document.querySelectorAll('.item-cb').forEach(cb => {
+    cb.checked = masterCb.checked;
+    const id = cb.dataset.id;
+    state.rowDecisions[id] = masterCb.checked ? 'approve' : 'reject';
+    const row = cb.closest('tr');
+    row.querySelectorAll('.row-decision-btn').forEach(b => {
+      const isActive = (b.dataset.action === (masterCb.checked ? 'approve' : 'reject'));
+      b.classList.toggle('active', isActive);
+    });
+  });
+}
+
+function approveAll() {
+  document.getElementById('select-all-cb').checked = true;
+  toggleSelectAll(document.getElementById('select-all-cb'));
+  submitActionDecision();   // one click: select all + write
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Approval submissions
+// ─────────────────────────────────────────────────────────────────────────────
+async function approvePlan() {
+  await postApproval({ gate: 'plan', approved: true });
+  document.getElementById('gate-plan').classList.add('hidden');
+}
+async function rejectPlan() {
+  await postApproval({ gate: 'plan', approved: false });
+  document.getElementById('gate-plan').classList.add('hidden');
+}
+function togglePlanEdit() {
+  document.getElementById('plan-edit-area').classList.toggle('hidden');
+}
+async function submitEditedPlan() {
+  const edited = document.getElementById('plan-edit-input').value.trim();
+  await postApproval({ gate: 'plan', approved: true, edited_plan: edited });
+  document.getElementById('gate-plan').classList.add('hidden');
+}
+
+async function submitActionDecision() {
+  const approvedIds = [];
+  const rejectedIds = [];
+  Object.entries(state.rowDecisions).forEach(([id, dec]) => {
+    if (dec === 'approve') approvedIds.push(id);
+    else rejectedIds.push(id);
+  });
+  setStatusBadge('executing', 'Writing…');
+  await postApproval({ gate: 'action', approved: true, approved_ids: approvedIds, rejected_ids: rejectedIds });
+  document.getElementById('gate-action').classList.add('hidden');
+}
+
+function rejectAllAction() {
+  state.flaggedItems.forEach(it => { state.rowDecisions[it.invoice_id] = 'reject'; });
+  submitActionDecision();
+}
+
+async function postApproval(decision) {
+  try {
+    await fetch(`/api/approve/${state.runId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(decision),
+    });
+  } catch (err) {
+    console.error('Approval error:', err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard renders
+// ─────────────────────────────────────────────────────────────────────────────
+function renderDeptChart() {
+  const el = document.getElementById('dept-chart');
+  const entries = Object.entries(state.deptCounts).sort((a,b) => b[1]-a[1]);
+  if (!entries.length) return;
+  const max = entries[0][1];
+  const colors = ['bg-orange-500','bg-red-500','bg-yellow-500','bg-purple-500','bg-pink-500'];
+
+  el.innerHTML = entries.slice(0,6).map(([dept, count], i) => `
+    <div class="bar-chart-item">
+      <span class="bar-chart-label" title="${escHtml(dept)}">${escHtml(dept)}</span>
+      <div class="bar-chart-track">
+        <div class="bar-chart-fill ${colors[i % colors.length]}" style="width:${Math.round(count/max*100)}%"></div>
+      </div>
+      <span class="bar-chart-value">${count}</span>
+    </div>
+  `).join('');
+}
+
+function renderVendorChart() {
+  const el = document.getElementById('vendor-chart');
+  const entries = Object.entries(state.vendorFlags).sort((a,b) => b[1]-a[1]);
+  if (!entries.length) return;
+  const max = entries[0][1];
+  const colors = ['bg-purple-500','bg-pink-500','bg-indigo-500','bg-violet-500','bg-fuchsia-500'];
+
+  el.innerHTML = entries.slice(0,6).map(([vendor, count], i) => `
+    <div class="bar-chart-item">
+      <span class="bar-chart-label" title="${escHtml(vendor)}">${escHtml(vendor)}</span>
+      <div class="bar-chart-track">
+        <div class="bar-chart-fill ${colors[i % colors.length]}" style="width:${Math.round(count/max*100)}%"></div>
+      </div>
+      <span class="bar-chart-value">${count}</span>
+    </div>
+  `).join('');
+}
+
+function renderReport(report) {
+  document.getElementById('download-btn').classList.remove('hidden');
+  document.getElementById('download-btn').classList.add('flex');
+
+  const md = report.markdown || '';
+  document.getElementById('report-content').innerHTML = `
+    <div class="mb-4 grid grid-cols-3 gap-3 p-3 bg-surface-700/40 rounded-lg border border-surface-600">
+      <div class="text-center">
+        <p class="text-xs text-gray-500">Flagged Items</p>
+        <p class="text-lg font-bold text-accent-red tabular-nums">${report.flagged_count ?? 0}</p>
+      </div>
+      <div class="text-center">
+        <p class="text-xs text-gray-500">Total At Risk</p>
+        <p class="text-lg font-bold text-accent-orange tabular-nums">${fmtCurrency(report.total_at_risk ?? 0)}</p>
+      </div>
+      <div class="text-center">
+        <p class="text-xs text-gray-500">Generated</p>
+        <p class="text-xs font-mono text-gray-400 mt-1">${fmtTs(report.generated_at)}</p>
+      </div>
+    </div>
+    <div class="prose-audit text-sm">${renderMarkdown(md)}</div>
+  `;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Download report
+// ─────────────────────────────────────────────────────────────────────────────
+function downloadReport() {
+  if (!state.report) return;
+  const md = state.report.markdown || '';
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `audit-report-${state.runId?.slice(0,8) || 'export'}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtCurrency(n) {
+  if (n == null) return '$—';
+  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+function fmtTs(ts) {
+  if (!ts) return '—';
+  try { return new Date(ts).toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }); } catch { return ts; }
+}
+
+function tsNow() {
+  const now = new Date();
+  return now.toLocaleTimeString('en-US', { hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+function setStatusBadge(type, text) {
+  const badge = document.getElementById('run-status-badge');
+  badge.classList.remove('hidden');
+  badge.classList.add('flex');
+  const dot = document.getElementById('status-dot');
+  const label = document.getElementById('status-text');
+  label.textContent = text;
+  const colors = {
+    planning: 'bg-blue-400',
+    executing: 'bg-purple-400',
+    awaiting: 'bg-yellow-400 animate-pulse',
+    done: 'bg-green-400',
+    error: 'bg-red-400',
+  };
+  dot.className = `w-1.5 h-1.5 rounded-full ${colors[type] || 'bg-gray-400'}`;
+}
+
+function animateKPI(id, target) {
+  const el = document.getElementById(id);
+  const cur = parseInt(el.textContent.replace(/[^0-9]/g,'')) || 0;
+  const step = Math.ceil((target - cur) / 12);
+  if (step <= 0) { el.textContent = target; return; }
+  let val = cur;
+  const t = setInterval(() => {
+    val = Math.min(val + step, target);
+    el.textContent = val;
+    el.classList.add('kpi-update');
+    setTimeout(() => el.classList.remove('kpi-update'), 250);
+    if (val >= target) clearInterval(t);
+  }, 40);
+}
+
+function animateKPICurrency(id, target) {
+  const el = document.getElementById(id);
+  const cur = parseInt(el.textContent.replace(/[^0-9]/g,'')) || 0;
+  const steps = 20;
+  const step = (target - cur) / steps;
+  if (step <= 0) { el.textContent = fmtCurrency(target); return; }
+  let val = cur;
+  let i = 0;
+  const t = setInterval(() => {
+    i++;
+    val = i >= steps ? target : cur + step * i;
+    el.textContent = fmtCurrency(val);
+    if (i >= steps) clearInterval(t);
+  }, 35);
+}
+
+function scrollTimeline() {
+  const tl = document.getElementById('timeline');
+  if (tl) tl.scrollTop = tl.scrollHeight;
+}
+
+function resetUI() {
+  // Reset state
+  state.runId = null;
+  state.stepCount = 0;
+  state.flaggedItems = [];
+  state.atRisk = 0;
+  state.rowDecisions = {};
+  state.report = null;
+  state.deptCounts = {};
+  state.vendorFlags = {};
+  state._lastPlan = '';
+  if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
+
+  // Reset timeline
+  document.getElementById('timeline').innerHTML = `
+    <div id="timeline-empty" class="py-12 text-center">
+      <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-surface-700 flex items-center justify-center">
+        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      </div>
+      <p class="text-sm text-gray-600">No audit running</p>
+      <p class="text-xs text-gray-700 mt-1">Launch a mission to see live steps</p>
+    </div>
+  `;
+
+  // Reset gates
+  document.getElementById('gate-plan').classList.add('hidden');
+  document.getElementById('gate-action').classList.add('hidden');
+  document.getElementById('plan-edit-area').classList.add('hidden');
+
+  // Reset KPIs
+  document.getElementById('kpi-at-risk').textContent = '$0';
+  document.getElementById('kpi-flags').textContent = '0';
+  document.getElementById('kpi-vendors').textContent = '—';
+  document.getElementById('dept-chart').innerHTML = '<p class="text-xs text-gray-600 italic">Waiting for data…</p>';
+  document.getElementById('vendor-chart').innerHTML = '<p class="text-xs text-gray-600 italic">Waiting for data…</p>';
+  document.getElementById('report-content').innerHTML = `
+    <div class="py-8 text-center">
+      <div class="w-10 h-10 mx-auto mb-2 rounded-full bg-surface-700 flex items-center justify-center">
+        <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      </div>
+      <p class="text-sm text-gray-600">Report will appear here when the audit completes</p>
+    </div>
+  `;
+  document.getElementById('download-btn').classList.add('hidden');
+  document.getElementById('download-btn').classList.remove('flex');
+  document.getElementById('run-id-display').classList.add('hidden');
+  document.getElementById('run-status-badge').classList.add('hidden');
+  document.getElementById('run-status-badge').classList.remove('flex');
+
+  // Reset launch btn
+  const btn = document.getElementById('launch-btn');
+  btn.disabled = false;
+  btn.innerHTML = `
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    Run Audit Mission
+  `;
+}
+
+// Very simple Markdown renderer (no dependencies)
+function renderMarkdown(md) {
+  if (!md) return '<p class="text-gray-600 italic">No report content</p>';
+  let html = escHtml(md);
+  // headings
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // bold / italic
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-200">$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // code blocks
+  html = html.replace(/```[\w]*\n([\s\S]*?)```/g, '<pre>$1</pre>');
+  // inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // hr
+  html = html.replace(/^---+$/gm, '<hr/>');
+  // list items
+  html = html.replace(/^\- (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`);
+  // paragraphs
+  html = html.replace(/\n\n+/g, '</p><p class="text-gray-400 text-xs">');
+  return `<p class="text-gray-400 text-xs">${html}</p>`;
+}

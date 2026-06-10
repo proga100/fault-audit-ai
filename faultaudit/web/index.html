@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FaultAuditAI — Corporate Finance Audit Console</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              900: '#0a0f1e',
+              800: '#0f1629',
+              700: '#162040',
+              600: '#1e2d5a',
+              500: '#2563eb',
+              400: '#3b82f6',
+              300: '#93c5fd',
+            },
+            surface: {
+              900: '#0d1117',
+              800: '#161b22',
+              700: '#21262d',
+              600: '#30363d',
+              500: '#3d444d',
+            },
+            accent: {
+              green:  '#10b981',
+              yellow: '#f59e0b',
+              red:    '#ef4444',
+              orange: '#f97316',
+              purple: '#8b5cf6',
+              cyan:   '#06b6d4',
+            }
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body class="h-full bg-surface-900 text-gray-100 font-sans antialiased">
+
+<!-- Top bar -->
+<header class="fixed top-0 left-0 right-0 z-50 h-12 bg-surface-800 border-b border-surface-600 flex items-center px-6 gap-4">
+  <div class="flex items-center gap-2.5">
+    <div class="w-7 h-7 rounded-md bg-brand-500 flex items-center justify-center">
+      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+      </svg>
+    </div>
+    <span class="font-semibold text-sm tracking-tight text-white">FaultAuditAI</span>
+    <span class="text-surface-500 text-xs font-mono">v1.0</span>
+  </div>
+  <div class="flex-1"></div>
+  <div id="run-status-badge" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface-700 border border-surface-500">
+    <span id="status-dot" class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+    <span id="status-text">Idle</span>
+  </div>
+  <div class="flex items-center gap-1.5 text-xs text-gray-500 font-mono">
+    <span id="run-id-display" class="hidden">RUN:<span id="run-id-val" class="text-brand-300 ml-1"></span></span>
+  </div>
+</header>
+
+<!-- Main layout -->
+<div class="flex h-full pt-12">
+
+  <!-- LEFT PANE: Mission Console -->
+  <div class="w-[540px] flex-shrink-0 border-r border-surface-600 flex flex-col bg-surface-900 overflow-hidden">
+
+    <!-- Mission input section -->
+    <div class="p-5 border-b border-surface-700 bg-surface-800">
+      <div class="flex items-center gap-2 mb-3">
+        <svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Mission Console</h2>
+      </div>
+      <div class="relative mb-3">
+        <textarea
+          id="mission-input"
+          rows="3"
+          placeholder="Describe your audit mission…"
+          class="w-full bg-surface-700 border border-surface-500 rounded-lg px-3 py-2.5 text-sm text-gray-100 placeholder-gray-500 resize-none focus:outline-none focus:ring-1 focus:ring-brand-400 focus:border-brand-400 font-mono leading-relaxed"
+        ></textarea>
+      </div>
+      <!-- Template buttons -->
+      <div class="flex flex-wrap gap-2 mb-3">
+        <button onclick="setTemplate(this)" data-text="Audit this month's vendor payments" class="template-btn px-2.5 py-1 text-xs bg-surface-700 border border-surface-500 rounded-md text-gray-300 hover:border-brand-400 hover:text-brand-300 transition-colors">Vendor Payments</button>
+        <button onclick="setTemplate(this)" data-text="Hunt duplicate invoices across all departments" class="template-btn px-2.5 py-1 text-xs bg-surface-700 border border-surface-500 rounded-md text-gray-300 hover:border-brand-400 hover:text-brand-300 transition-colors">Duplicate Invoices</button>
+        <button onclick="setTemplate(this)" data-text="Department budget check — flag overages" class="template-btn px-2.5 py-1 text-xs bg-surface-700 border border-surface-500 rounded-md text-gray-300 hover:border-brand-400 hover:text-brand-300 transition-colors">Budget Check</button>
+        <button onclick="setTemplate(this)" data-text="Screen new vendors for OFAC hits and ghost vendor patterns" class="template-btn px-2.5 py-1 text-xs bg-surface-700 border border-surface-500 rounded-md text-gray-300 hover:border-brand-400 hover:text-brand-300 transition-colors">Vendor Screening</button>
+      </div>
+      <button id="launch-btn" onclick="launchMission()" class="w-full py-2 rounded-lg bg-brand-500 hover:bg-brand-400 text-white text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Run Audit Mission
+      </button>
+    </div>
+
+    <!-- Step timeline -->
+    <div class="flex-1 overflow-y-auto">
+      <div class="px-4 py-3 flex items-center gap-2 border-b border-surface-700">
+        <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+        <span class="text-xs text-gray-500 font-medium uppercase tracking-wider">Live Step Timeline</span>
+      </div>
+
+      <div id="timeline" class="px-4 py-3 space-y-2">
+        <!-- Empty state -->
+        <div id="timeline-empty" class="py-12 text-center">
+          <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-surface-700 flex items-center justify-center">
+            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          </div>
+          <p class="text-sm text-gray-600">No audit running</p>
+          <p class="text-xs text-gray-700 mt-1">Launch a mission to see live steps</p>
+        </div>
+      </div>
+
+      <!-- Gate 1: Plan approval -->
+      <div id="gate-plan" class="hidden mx-4 mb-4 rounded-xl border border-brand-500/40 bg-brand-900/30 overflow-hidden">
+        <div class="px-4 py-3 bg-brand-600/20 border-b border-brand-500/30 flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-brand-400 animate-pulse"></div>
+          <span class="text-sm font-semibold text-brand-300">Gate 1 — Plan Approval</span>
+          <span class="ml-auto text-xs text-brand-400/70 font-mono">awaiting_approval</span>
+        </div>
+        <div class="p-4">
+          <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide font-medium">Proposed audit plan:</p>
+          <div id="plan-text" class="text-sm text-gray-200 bg-surface-700/50 rounded-lg p-3 font-mono leading-relaxed whitespace-pre-wrap mb-4"></div>
+          <div class="flex gap-2 mb-2">
+            <button onclick="approvePlan()" class="flex-1 py-2 rounded-lg bg-accent-green/20 border border-accent-green/40 text-accent-green text-sm font-semibold hover:bg-accent-green/30 transition-colors">Approve Plan</button>
+            <button onclick="togglePlanEdit()" class="px-4 py-2 rounded-lg bg-surface-700 border border-surface-500 text-gray-300 text-sm font-semibold hover:border-gray-400 transition-colors">Edit</button>
+            <button onclick="rejectPlan()" class="px-4 py-2 rounded-lg bg-accent-red/20 border border-accent-red/40 text-accent-red text-sm font-semibold hover:bg-accent-red/30 transition-colors">Reject</button>
+          </div>
+          <div id="plan-edit-area" class="hidden">
+            <textarea id="plan-edit-input" rows="4" class="w-full bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-sm text-gray-100 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-brand-400 mb-2"></textarea>
+            <button onclick="submitEditedPlan()" class="w-full py-2 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-400 transition-colors">Submit Edited Plan</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gate 2: Action approval -->
+      <div id="gate-action" class="hidden mx-4 mb-4 rounded-xl border border-accent-orange/40 bg-orange-950/20 overflow-hidden">
+        <div class="px-4 py-3 bg-accent-orange/10 border-b border-accent-orange/30 flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-accent-orange animate-pulse"></div>
+          <span class="text-sm font-semibold text-orange-300">Gate 2 — Action Approval</span>
+          <span class="ml-auto text-xs text-orange-400/70 font-mono">awaiting_approval</span>
+        </div>
+        <div class="p-4">
+          <p id="flagged-caption" class="text-xs text-gray-400 mb-3 uppercase tracking-wide font-medium">Flagged items — review &amp; approve:</p>
+
+          <!-- Flagged items table -->
+          <div class="rounded-lg border border-surface-600 max-h-[44vh] overflow-y-auto">
+            <table class="w-full text-xs">
+              <thead class="sticky top-0 z-10">
+                <tr class="bg-surface-700 border-b border-surface-600">
+                  <th class="px-2 py-2 text-left text-gray-400 font-medium">
+                    <input type="checkbox" id="select-all-cb" onchange="toggleSelectAll(this)" class="rounded border-surface-500" />
+                  </th>
+                  <th class="px-2 py-2 text-left text-gray-400 font-medium">Vendor</th>
+                  <th class="px-2 py-2 text-right text-gray-400 font-medium">Amount</th>
+                  <th class="px-2 py-2 text-left text-gray-400 font-medium">Flags</th>
+                  <th class="px-2 py-2 text-center text-gray-400 font-medium">OK?</th>
+                </tr>
+              </thead>
+              <tbody id="flagged-items-tbody" class="divide-y divide-surface-700">
+              </tbody>
+            </table>
+          </div>
+
+          <div class="flex gap-2 mt-3">
+            <button onclick="submitActionDecision()" class="flex-[2] py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-400 transition-colors">✓ Approve &amp; Write</button>
+            <button onclick="rejectAllAction()" class="flex-1 py-2.5 rounded-lg bg-surface-700 border border-surface-600 text-gray-300 text-sm font-medium hover:bg-surface-600 transition-colors">Reject All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANE: Live Dashboard -->
+  <div class="flex-1 flex flex-col bg-surface-900 overflow-y-auto">
+
+    <div class="p-5 border-b border-surface-700 bg-surface-800">
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-accent-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Live Dashboard</h2>
+      </div>
+    </div>
+
+    <div class="p-5 flex flex-col gap-5">
+
+      <!-- KPI row -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="rounded-xl bg-surface-800 border border-surface-600 p-4">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">$ At Risk</p>
+          <p id="kpi-at-risk" class="text-2xl font-bold text-accent-red tabular-nums">$0</p>
+          <p class="text-xs text-gray-600 mt-1">total flagged value</p>
+        </div>
+        <div class="rounded-xl bg-surface-800 border border-surface-600 p-4">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Flags</p>
+          <p id="kpi-flags" class="text-2xl font-bold text-accent-orange tabular-nums">0</p>
+          <p class="text-xs text-gray-600 mt-1">suspicious items</p>
+        </div>
+        <div class="rounded-xl bg-surface-800 border border-surface-600 p-4">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Vendors Checked</p>
+          <p id="kpi-vendors" class="text-2xl font-bold text-brand-300 tabular-nums">—</p>
+          <p class="text-xs text-gray-600 mt-1">in scope</p>
+        </div>
+      </div>
+
+      <!-- Charts row -->
+      <div class="grid grid-cols-2 gap-4">
+
+        <!-- Flags by department -->
+        <div class="rounded-xl bg-surface-800 border border-surface-600 p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+            <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Flags by Department</span>
+          </div>
+          <div id="dept-chart" class="space-y-2">
+            <p class="text-xs text-gray-600 italic">Waiting for data…</p>
+          </div>
+        </div>
+
+        <!-- Vendor risk list -->
+        <div class="rounded-xl bg-surface-800 border border-surface-600 p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Vendor Risk Signals</span>
+          </div>
+          <div id="vendor-chart" class="space-y-2">
+            <p class="text-xs text-gray-600 italic">Waiting for data…</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Audit Report Preview -->
+      <div id="report-section" class="rounded-xl bg-surface-800 border border-surface-600 overflow-hidden">
+        <div class="px-4 py-3 border-b border-surface-600 bg-surface-700/50 flex items-center gap-2">
+          <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span class="text-xs font-medium text-gray-400 uppercase tracking-wide">Audit Report</span>
+          <div class="flex-1"></div>
+          <button id="download-btn" onclick="downloadReport()" class="hidden items-center gap-1.5 px-3 py-1 rounded-md bg-brand-500 hover:bg-brand-400 text-white text-xs font-semibold transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Download .md
+          </button>
+        </div>
+        <div id="report-content" class="p-4">
+          <div class="py-8 text-center">
+            <div class="w-10 h-10 mx-auto mb-2 rounded-full bg-surface-700 flex items-center justify-center">
+              <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            </div>
+            <p class="text-sm text-gray-600">Report will appear here when the audit completes</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

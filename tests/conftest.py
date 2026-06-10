@@ -7,9 +7,19 @@ data every slice tests against.
 from __future__ import annotations
 
 import hashlib
+import os
+
+# Tests always run against mongomock, which has no $vectorSearch. Force mock mode
+# regardless of .env (which may set USE_MOCKS=false for live runs). Env vars take
+# precedence over the .env file in pydantic-settings.
+os.environ["USE_MOCKS"] = "true"
 
 import mongomock
 import pytest
+
+from faultaudit.config import get_settings
+
+get_settings.cache_clear()
 
 from faultaudit.models import Invoice, Policy, Vendor
 
