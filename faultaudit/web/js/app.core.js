@@ -15,6 +15,7 @@ const state = {
   itemStatuses: {},      // invoice_id -> pending | approved | rejected
   invoiceExplanations: {},
   invoiceExplainLoading: {},
+  reportGenerating: false,
   report: null,
   deptCounts: {},
   vendorFlags: {},

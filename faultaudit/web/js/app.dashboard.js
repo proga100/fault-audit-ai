@@ -38,6 +38,7 @@ function renderVendorChart() {
 }
 
 function renderReport(report) {
+  state.reportGenerating = false;
   document.getElementById('download-btn').classList.remove('hidden');
   document.getElementById('download-btn').classList.add('flex');
   document.getElementById('download-pdf-btn')?.classList.remove('hidden');
@@ -64,6 +65,56 @@ function renderReport(report) {
     ${renderReportItemsTable(report.items || [])}
   `;
   renderReportsView();
+}
+
+function renderReportGenerating() {
+  const html = reportGeneratingHtml();
+  const reportContent = document.getElementById('report-content');
+  if (reportContent) reportContent.innerHTML = html;
+  const reportsContent = document.getElementById('reports-report-content');
+  if (reportsContent) reportsContent.innerHTML = html;
+  document.getElementById('download-btn')?.classList.add('hidden');
+  document.getElementById('download-btn')?.classList.remove('flex');
+  document.getElementById('download-pdf-btn')?.classList.add('hidden');
+  document.getElementById('download-pdf-btn')?.classList.remove('flex');
+  document.getElementById('download-excel-btn')?.classList.add('hidden');
+  document.getElementById('download-excel-btn')?.classList.remove('flex');
+}
+
+function reportGeneratingHtml() {
+  const model = state.appStatus?.gemini_model || 'Gemini 3.x';
+  const steps = [
+    ['AuditTrailAgent', 'Finalizing approved findings in the audit log'],
+    ['ReportGenerationAgent', 'Assembling executive summary, evidence table, and remediation notes'],
+    [model, 'Drafting the final audit report'],
+  ];
+  return `
+    <div class="rounded-lg border border-brand-500/40 bg-brand-900/20 p-4">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="pending-step step-badge bg-brand-500/15"></span>
+        <div>
+          <p class="text-xs text-brand-200 uppercase tracking-wide font-semibold">Generating Audit Report</p>
+          <p class="mt-1 text-xs text-gray-400">Approved findings are being converted into the final audit package.</p>
+        </div>
+      </div>
+      <div class="space-y-2">
+        ${steps.map(([agent, message]) => `
+          <div class="invoice-agent-step running">
+            <span class="pending-step step-badge bg-brand-500/15"></span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="agent-chip text-[10px]">${escHtml(agent)}</span>
+                <span class="text-[11px] text-brand-200">Running</span>
+              </div>
+              <p class="mt-1 text-xs text-gray-400">
+                ${escHtml(message)}<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+              </p>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function renderFindingsView() {
@@ -161,7 +212,9 @@ function renderFindingDetail(item) {
 function renderReportsView() {
   const reportEl = document.getElementById('reports-report-content');
   if (!reportEl) return;
-  if (!state.report) {
+  if (state.reportGenerating) {
+    reportEl.innerHTML = reportGeneratingHtml();
+  } else if (!state.report) {
     reportEl.innerHTML = '<p class="text-sm text-gray-600">Report will appear here when the audit completes.</p>';
   } else {
     reportEl.innerHTML = `

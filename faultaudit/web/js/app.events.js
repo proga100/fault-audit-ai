@@ -127,19 +127,22 @@ function handleAwaitingApproval(evt) {
 
 function handleWritten(evt) {
   removePendingTimelineCard('action-approved');
-  setStatusBadge('executing', 'Writing…');
+  setStatusBadge('executing', 'Generating report…');
   document.getElementById('gate-action').classList.add('hidden');
+  state.reportGenerating = true;
   state.flaggedItems.forEach(item => {
     state.itemStatuses[item.invoice_id] = state.rowDecisions[item.invoice_id] === 'approve'
       ? 'approved'
       : 'rejected';
   });
   renderFindingsView();
+  renderReportGenerating();
   appendTimelineCard('written', evt.data);
 }
 
 async function handleReportReady(evt) {
   removePendingTimelineCard('action-approved');
+  state.reportGenerating = false;
   setStatusBadge('done', 'Report ready');
   appendTimelineCard('report_ready', evt.data);
   // Fetch the actual report
@@ -155,6 +158,7 @@ async function handleReportReady(evt) {
 
 function handleError(evt) {
   clearPendingTimelineCards();
+  state.reportGenerating = false;
   setStatusBadge('error', 'Error');
   appendTimelineCard('error', evt.data);
   const btn = document.getElementById('launch-btn');

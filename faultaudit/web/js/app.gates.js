@@ -308,6 +308,8 @@ async function submitActionDecision() {
   recordApproval('action', 'approved', `${approvedIds.length} approved, ${rejectedIds.length} rejected`);
   setStatusBadge('executing', 'Writing…');
   document.getElementById('gate-action').classList.add('hidden');
+  state.reportGenerating = true;
+  renderReportGenerating();
   showPendingTimelineCard('action-approved', {
     label: 'Writing',
     agent: 'AuditTrailAgent',

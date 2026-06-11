@@ -411,6 +411,7 @@ function resetUI() {
   state.itemStatuses = {};
   state.invoiceExplanations = {};
   state.invoiceExplainLoading = {};
+  state.reportGenerating = false;
   state.report = null;
   state.deptCounts = {};
   state.vendorFlags = {};
