@@ -1,0 +1,59 @@
+/* FaultAuditAI — Finance Audit Console */
+
+.tab-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #9ca3af;
+  transition: background 0.15s, color 0.15s;
+}
+.tab-btn:hover { color: #e5e7eb; background: #21262d; }
+.tab-btn.active { color: #fff; background: #2563eb; }
+
+.status-chip, .agent-chip, .tool-chip, .prompt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+  background: #161b22;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+.tool-chip.mongo { color: #86efac; border-color: rgba(16,185,129,0.45); background: rgba(16,185,129,0.10); }
+.tool-chip.gemini { color: #93c5fd; border-color: rgba(59,130,246,0.45); background: rgba(59,130,246,0.10); }
+.tool-chip.detector { color: #d1d5db; border-color: rgba(156,163,175,0.35); background: rgba(156,163,175,0.08); }
+.tool-chip.human { color: #fcd34d; border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.10); }
+.prompt-chip { font-size: 12px; cursor: pointer; }
+.prompt-chip:hover { border-color: #3b82f6; color: #bfdbfe; }
+
+#ask-drawer.open { transform: translateX(0); }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #161b22; }
+::-webkit-scrollbar-thumb { background: #3d444d; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4d5561; }
+
+/* Smooth counter animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.kpi-update { animation: countUp 0.25s ease-out; }
+/* Pulse spinner */
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid rgba(59,130,246,0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+/* Status badge colors */
+.status-planning  { color: #3b82f6; }
+.status-executing { color: #8b5cf6; }
+.status-awaiting  { color: #f59e0b; }
+.status-done      { color: #10b981; }
+.status-error     { color: #ef4444; }

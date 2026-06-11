@@ -376,6 +376,14 @@
   </div>
 </aside>
 
-<script src="app.js"></script>
+<!-- Frontend modules are loaded as classic scripts to preserve inline handlers. Keep this order. -->
+<script src="js/app.core.js"></script>
+<script src="js/app.events.js"></script>
+<script src="js/app.timeline.js"></script>
+<script src="js/app.gates.js"></script>
+<script src="js/app.dashboard.js"></script>
+<script src="js/app.exports.js"></script>
+<script src="js/app.ask.js"></script>
+<script src="js/app.utils.js"></script>
 </body>
 </html>

@@ -4,7 +4,8 @@
 Serves:
   GET  /           -> index.html
   GET  /styles.css -> styles.css
-  GET  /app.js     -> app.js
+  GET  /js/*       -> frontend modules
+  GET  /styles/*   -> CSS modules
   POST /api/mission              {text} -> {run_id}
   GET  /api/events/{run_id}      text/event-stream of AgentEvent (SSE)
   POST /api/approve/{run_id}     ApprovalDecision -> {ok: true}
@@ -318,6 +319,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._serve_file(WEB_DIR / "styles.css", "text/css")
         elif path == "/app.js":
             self._serve_file(WEB_DIR / "app.js", "application/javascript")
+        elif path.startswith("/js/") and path.endswith(".js"):
+            self._serve_static_asset(path, "application/javascript")
+        elif path.startswith("/styles/") and path.endswith(".css"):
+            self._serve_static_asset(path, "text/css")
         elif path.startswith("/api/events/"):
             run_id = path.removeprefix("/api/events/")
             self._sse_stream(run_id)
@@ -426,6 +431,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._json(report)
 
     # ── helpers ───────────────────────────────────────────────────────────────
+    def _serve_static_asset(self, request_path: str, content_type: str):
+        relative = Path(request_path.lstrip("/"))
+        if ".." in relative.parts:
+            self._not_found()
+            return
+        self._serve_file(WEB_DIR / relative, content_type)
+
     def _serve_file(self, path: Path, content_type: str):
         if not path.exists():
             self._error(404, f"file not found: {path.name}")
