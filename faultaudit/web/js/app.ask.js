@@ -50,6 +50,7 @@ async function explainInvoiceDocument(invoiceId) {
   state.invoiceExplainLoading[item.invoice_id] = true;
   delete state.invoiceExplanations[item.invoice_id];
   renderMissionInvoiceReview(item);
+  if (state.selectedFindingId === item.invoice_id) renderFindingDetail(item);
   showPendingTimelineCard(pendingId, {
     label: 'Analyzing',
     agent: 'AuditAssistantAgent',

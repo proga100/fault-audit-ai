@@ -66,6 +66,30 @@
   margin-top: 4px;
 }
 
+.invoice-agent-activity {
+  border-bottom: 1px solid rgba(48,54,61,0.75);
+  padding-bottom: 12px;
+}
+.invoice-agent-step {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 10px;
+  border: 1px solid rgba(48,54,61,0.85);
+  border-radius: 8px;
+  background: rgba(13,17,23,0.32);
+}
+.invoice-agent-step.running {
+  border-color: rgba(59,130,246,0.35);
+  background: rgba(37,99,235,0.10);
+}
+.invoice-agent-step.complete {
+  border-color: rgba(16,185,129,0.24);
+}
+.invoice-agent-step .typing-dots {
+  margin-left: 6px;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #161b22; }

@@ -184,14 +184,7 @@ function renderInvoiceExplanationBlock(item) {
   if (loading) {
     return `
       <div class="rounded-lg border border-brand-500/40 bg-brand-900/20 p-4">
-        <div class="flex items-center gap-2 text-sm font-semibold text-brand-200">
-          <span class="pending-step step-badge bg-brand-500/15"></span>
-          AuditAssistantAgent
-          <span class="tool-chip text-[10px]">${escHtml(state.appStatus?.gemini_model || 'Gemini 3.x')}</span>
-        </div>
-        <p class="mt-2 text-sm text-gray-300">
-          Reading invoice evidence and preparing auditor guidance<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
-        </p>
+        ${renderInvoiceAgentActivity('running')}
       </div>
     `;
   }
@@ -205,12 +198,50 @@ function renderInvoiceExplanationBlock(item) {
   }
   return `
     <div class="rounded-lg border border-brand-500/40 bg-brand-900/20 p-4">
+      ${renderInvoiceAgentActivity('complete', explanation.model)}
       <div class="flex items-center gap-2">
         <p class="text-xs text-brand-200 uppercase tracking-wide font-semibold">AI Explanation</p>
         <span class="ml-auto text-[11px] text-gray-500">${escHtml(explanation.model || state.appStatus?.gemini_model || 'Gemini 3.x')}</span>
       </div>
       <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-200">${escHtml(explanation.answer)}</p>
       <p class="mt-3 text-[11px] text-gray-500">AI-generated — requires human review before approval.</p>
+    </div>
+  `;
+}
+
+function renderInvoiceAgentActivity(status, model) {
+  const modelLabel = model || state.appStatus?.gemini_model || 'Gemini 3.x';
+  const rows = status === 'running'
+    ? [
+        ['AuditAssistantAgent', 'Reviewing clicked invoice evidence', true],
+        ['AuditContextAgent', 'Loading run, vendor, flags, and evidence context', true],
+        [modelLabel, 'Drafting auditor explanation', true],
+      ]
+    : [
+        ['AuditAssistantAgent', 'Invoice evidence reviewed', false],
+        ['AuditContextAgent', 'Context attached to answer', false],
+        [modelLabel, 'Explanation ready', false],
+      ];
+  return `
+    <div class="invoice-agent-activity mb-4">
+      <p class="text-xs text-brand-200 uppercase tracking-wide font-semibold">Agent Activity</p>
+      <div class="mt-2 space-y-2">
+        ${rows.map(([agent, message, running]) => `
+          <div class="invoice-agent-step ${running ? 'running' : 'complete'}">
+            <span class="${running ? 'pending-step' : 'tool-done-dot'} step-badge bg-brand-500/15"></span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="agent-chip text-[10px]">${escHtml(agent)}</span>
+                <span class="text-[11px] ${running ? 'text-brand-200' : 'text-green-300'}">${running ? 'Running' : 'Done'}</span>
+              </div>
+              <p class="mt-1 text-xs text-gray-400">
+                ${escHtml(message)}
+                ${running ? '<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>' : ''}
+              </p>
+            </div>
+          </div>
+        `).join('')}
+      </div>
     </div>
   `;
 }
