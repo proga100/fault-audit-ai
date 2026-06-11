@@ -148,16 +148,14 @@
           <span class="ml-auto text-xs text-brand-400/70 font-mono">awaiting_approval</span>
         </div>
         <div class="p-4">
-          <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide font-medium">Proposed audit plan:</p>
-          <div id="plan-text" class="text-sm text-gray-200 bg-surface-700/50 rounded-lg p-3 font-mono leading-relaxed whitespace-pre-wrap mb-4"></div>
+          <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide font-medium">Review or edit the proposed audit plan:</p>
+          <div id="plan-edit-area">
+            <textarea id="plan-edit-input" rows="6" class="w-full bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-sm text-gray-100 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-brand-400 mb-3 leading-relaxed"></textarea>
+          </div>
           <div class="flex gap-2 mb-2">
             <button onclick="approvePlan()" class="flex-1 py-2 rounded-lg bg-accent-green/20 border border-accent-green/40 text-accent-green text-sm font-semibold hover:bg-accent-green/30 transition-colors">Approve Plan</button>
-            <button onclick="togglePlanEdit()" class="px-4 py-2 rounded-lg bg-surface-700 border border-surface-500 text-gray-300 text-sm font-semibold hover:border-gray-400 transition-colors">Edit</button>
+            <button onclick="focusPlanEditor()" class="px-4 py-2 rounded-lg bg-surface-700 border border-surface-500 text-gray-300 text-sm font-semibold hover:border-gray-400 transition-colors">Edit</button>
             <button onclick="rejectPlan()" class="px-4 py-2 rounded-lg bg-accent-red/20 border border-accent-red/40 text-accent-red text-sm font-semibold hover:bg-accent-red/30 transition-colors">Reject</button>
-          </div>
-          <div id="plan-edit-area" class="hidden">
-            <textarea id="plan-edit-input" rows="4" class="w-full bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-sm text-gray-100 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-brand-400 mb-2"></textarea>
-            <button onclick="submitEditedPlan()" class="w-full py-2 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-400 transition-colors">Submit Edited Plan</button>
           </div>
         </div>
       </div>

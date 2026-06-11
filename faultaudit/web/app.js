@@ -243,8 +243,8 @@ function handleAwaitingApproval(evt) {
 
   if (gate === 'plan') {
     const plan = evt.data?.plan || state._lastPlan || '';
-    document.getElementById('plan-text').textContent = plan;
     document.getElementById('plan-edit-input').value = plan;
+    document.getElementById('plan-edit-area').classList.remove('hidden');
     document.getElementById('gate-plan').classList.remove('hidden');
     scrollTimeline();
   } else if (gate === 'action') {
@@ -326,7 +326,7 @@ function appendTimelineCard(type, data) {
     const planText = data?.plan || data?.text || '';
     state._lastPlan = planText;
     bodyHtml = planText
-      ? `<p class="text-xs text-gray-300 font-mono whitespace-pre-wrap mt-1 leading-relaxed">${escHtml(planText)}</p>`
+      ? `<p class="text-xs text-gray-500 mt-1">Plan generated. Review or edit it in Gate 1.</p>`
       : '';
   } else if (type === 'tool_call') {
     const tool = data?.tool || data?.tool_name || data?.name || 'unknown';
@@ -481,8 +481,11 @@ function approveAll() {
 // Approval submissions
 // ─────────────────────────────────────────────────────────────────────────────
 async function approvePlan() {
-  recordApproval('plan', 'approved', 'Plan approved');
-  await postApproval({ gate: 'plan', approved: true });
+  const edited = document.getElementById('plan-edit-input')?.value.trim() || '';
+  const original = state._lastPlan || '';
+  const changed = edited && edited !== original;
+  recordApproval('plan', 'approved', changed ? 'Edited plan approved' : 'Plan approved');
+  await postApproval({ gate: 'plan', approved: true, ...(changed ? { edited_plan: edited } : {}) });
   document.getElementById('gate-plan').classList.add('hidden');
 }
 async function rejectPlan() {
@@ -490,14 +493,12 @@ async function rejectPlan() {
   await postApproval({ gate: 'plan', approved: false });
   document.getElementById('gate-plan').classList.add('hidden');
 }
-function togglePlanEdit() {
-  document.getElementById('plan-edit-area').classList.toggle('hidden');
-}
-async function submitEditedPlan() {
-  const edited = document.getElementById('plan-edit-input').value.trim();
-  recordApproval('plan', 'approved', 'Edited plan submitted');
-  await postApproval({ gate: 'plan', approved: true, edited_plan: edited });
-  document.getElementById('gate-plan').classList.add('hidden');
+
+function focusPlanEditor() {
+  const input = document.getElementById('plan-edit-input');
+  if (!input) return;
+  input.focus();
+  input.setSelectionRange(0, input.value.length);
 }
 
 async function submitActionDecision() {
@@ -1763,7 +1764,7 @@ function resetUI() {
   // Reset gates
   document.getElementById('gate-plan').classList.add('hidden');
   document.getElementById('gate-action').classList.add('hidden');
-  document.getElementById('plan-edit-area').classList.add('hidden');
+  document.getElementById('plan-edit-area').classList.remove('hidden');
 
   // Reset KPIs
   document.getElementById('kpi-at-risk').textContent = '$0';
