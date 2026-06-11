@@ -21,6 +21,7 @@ const state = {
   baselineStats: null,
   currentTab: 'mission',
   selectedFindingId: null,
+  selectedGateInvoiceId: null,
   pendingTimelineCards: {},
   activeToolCards: {},
 };

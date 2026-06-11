@@ -7,17 +7,28 @@ function renderFlaggedTable() {
 
   state.flaggedItems.forEach(item => {
     const tr = document.createElement('tr');
-    tr.className = 'bg-surface-800 hover:bg-surface-700/50 transition-colors';
+    const active = state.selectedGateInvoiceId === item.invoice_id ? 'active' : '';
+    tr.className = `gate-review-row finding-row ${active} bg-surface-800 hover:bg-surface-700/50 transition-colors`;
     tr.dataset.invoiceId = item.invoice_id;
+    tr.tabIndex = 0;
+    tr.title = 'Open invoice review';
+    tr.onclick = () => openMissionInvoiceReview(item.invoice_id);
+    tr.onkeydown = (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openMissionInvoiceReview(item.invoice_id);
+      }
+    };
 
     const reasons = (item.reasons || []).map(r =>
       `<span class="reason-chip ${r}">${r.replace(/_/g,' ')}</span>`
     ).join(' ');
     const shortId = escHtml(String(item.invoice_id).slice(0, 8));
+    const decision = state.rowDecisions[item.invoice_id] || 'approve';
 
     tr.innerHTML = `
       <td class="px-2 py-2">
-        <input type="checkbox" class="item-cb rounded border-surface-500" data-id="${escHtml(item.invoice_id)}" checked onchange="handleCbChange(this)" />
+        <input type="checkbox" class="item-cb rounded border-surface-500" data-id="${escAttr(item.invoice_id)}" ${decision === 'approve' ? 'checked' : ''} onclick="event.stopPropagation()" onchange="handleCbChange(this)" />
       </td>
       <td class="px-2 py-2 text-xs text-gray-200 max-w-[130px] truncate" title="${escHtml(item.vendor_name)}">
         ${escHtml(item.vendor_name)}
@@ -27,8 +38,8 @@ function renderFlaggedTable() {
       <td class="px-2 py-2"><div class="flex flex-wrap gap-1 max-w-[150px]">${reasons}</div></td>
       <td class="px-2 py-2 text-center">
         <div class="flex gap-1 justify-center">
-          <button class="row-decision-btn approve active" data-id="${escHtml(item.invoice_id)}" data-action="approve" onclick="setRowDecision(this,'approve')">✓</button>
-          <button class="row-decision-btn reject" data-id="${escHtml(item.invoice_id)}" data-action="reject" onclick="setRowDecision(this,'reject')">✕</button>
+          <button class="row-decision-btn approve ${decision === 'approve' ? 'active' : ''}" data-id="${escAttr(item.invoice_id)}" data-action="approve" onclick="event.stopPropagation(); setRowDecision(this,'approve')">✓</button>
+          <button class="row-decision-btn reject ${decision === 'reject' ? 'active' : ''}" data-id="${escAttr(item.invoice_id)}" data-action="reject" onclick="event.stopPropagation(); setRowDecision(this,'reject')">✕</button>
         </div>
       </td>
     `;
@@ -48,6 +59,7 @@ function setRowDecision(btn, decision) {
   // Sync checkbox
   const cb = row.querySelector('.item-cb');
   if (cb) cb.checked = (decision === 'approve');
+  if (state.selectedGateInvoiceId === id) renderMissionInvoiceReview(findInvoiceItem(id));
 }
 
 function handleCbChange(cb) {
@@ -59,6 +71,7 @@ function handleCbChange(cb) {
     if (b.dataset.action === decision) b.classList.add('active');
     else b.classList.remove('active');
   });
+  if (state.selectedGateInvoiceId === id) renderMissionInvoiceReview(findInvoiceItem(id));
 }
 
 function toggleSelectAll(masterCb) {
@@ -78,6 +91,101 @@ function approveAll() {
   document.getElementById('select-all-cb').checked = true;
   toggleSelectAll(document.getElementById('select-all-cb'));
   submitActionDecision();   // one click: select all + write
+}
+
+function openMissionInvoiceReview(invoiceId) {
+  const item = findInvoiceItem(invoiceId);
+  if (!item) return;
+  state.selectedGateInvoiceId = item.invoice_id;
+  renderFlaggedTable();
+  renderMissionInvoiceReview(item);
+  document.getElementById('mission-dashboard-header')?.classList.add('hidden');
+  document.getElementById('mission-dashboard-content')?.classList.add('hidden');
+  const review = document.getElementById('mission-invoice-review');
+  review?.classList.remove('hidden');
+  review?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeMissionInvoiceReview() {
+  state.selectedGateInvoiceId = null;
+  document.getElementById('mission-invoice-review')?.classList.add('hidden');
+  document.getElementById('mission-dashboard-header')?.classList.remove('hidden');
+  document.getElementById('mission-dashboard-content')?.classList.remove('hidden');
+  renderFlaggedTable();
+}
+
+function renderMissionInvoiceReview(item) {
+  const el = document.getElementById('mission-invoice-review');
+  if (!el || !item) return;
+  const reasons = (item.reasons || []).map(r => `<span class="reason-chip ${escHtml(r)}">${escHtml(String(r).replace(/_/g,' '))}</span>`).join(' ');
+  const detailLines = String(item.detail || 'No detail supplied.').split(';').map(s => s.trim()).filter(Boolean);
+  const decision = state.rowDecisions[item.invoice_id] || 'approve';
+  const previewHtml = escAttr(buildInvoiceDocumentHtml(item, { embedded: true }));
+  el.innerHTML = `
+    <div class="rounded-xl bg-surface-800 border border-surface-600 overflow-hidden fade-in">
+      <div class="px-4 py-3 border-b border-surface-600 bg-surface-700/50 flex items-center gap-3">
+        <button onclick="closeMissionInvoiceReview()" class="w-8 h-8 rounded-md border border-surface-500 bg-surface-800 text-gray-300 hover:text-white hover:border-brand-400 transition-colors" title="Back to dashboard" aria-label="Back to dashboard">←</button>
+        <div>
+          <p class="text-xs text-gray-500 uppercase tracking-wide">Invoice Review</p>
+          <p class="text-sm text-gray-200 font-mono">${escHtml(item.invoice_id)}</p>
+        </div>
+        <span class="ml-auto status-pill ${decision === 'approve' ? 'approved' : 'rejected'}">${decision === 'approve' ? 'Queued to approve' : 'Queued to reject'}</span>
+      </div>
+      <div class="p-4 space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-lg bg-surface-700/40 border border-surface-600 p-3">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Vendor</p>
+            <p class="text-sm text-gray-200 mt-1">${escHtml(item.vendor_name)}</p>
+          </div>
+          <div class="rounded-lg bg-surface-700/40 border border-surface-600 p-3">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Amount</p>
+            <p class="text-sm font-mono text-accent-red mt-1">${fmtCurrency(item.amount)}</p>
+          </div>
+          <div class="rounded-lg bg-surface-700/40 border border-surface-600 p-3">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Department</p>
+            <p class="text-sm text-gray-200 mt-1">${escHtml(item.department)}</p>
+          </div>
+          <div class="rounded-lg bg-surface-700/40 border border-surface-600 p-3">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Decision</p>
+            <div class="mt-2 flex gap-2">
+              <button class="row-decision-btn approve ${decision === 'approve' ? 'active' : ''}" onclick="setMissionInvoiceDecision('${escAttr(item.invoice_id)}','approve')">✓ Approve</button>
+              <button class="row-decision-btn reject ${decision === 'reject' ? 'active' : ''}" onclick="setMissionInvoiceDecision('${escAttr(item.invoice_id)}','reject')">✕ Reject</button>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1">${reasons}</div>
+        <div>
+          <p class="text-xs text-gray-500 uppercase tracking-wide mb-2">Evidence</p>
+          <ul class="space-y-1">${detailLines.map(line => `<li class="text-sm text-gray-300">• ${escHtml(line)}</li>`).join('')}</ul>
+        </div>
+        <div>
+          <div class="mb-2 flex items-center gap-2">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Invoice PDF Preview</p>
+            <button onclick="openInvoiceDocument('${escAttr(item.invoice_id)}')" class="ml-auto text-xs text-brand-300 hover:text-brand-200">Open PDF</button>
+          </div>
+          <iframe class="invoice-preview-frame" title="Invoice preview ${escAttr(item.invoice_id)}" srcdoc="${previewHtml}"></iframe>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="explainInvoiceDocument('${escAttr(item.invoice_id)}')" class="py-2 rounded-md bg-brand-500 hover:bg-brand-400 text-white text-sm font-semibold">Explain with AI</button>
+          <button onclick="openInvoiceDocument('${escAttr(item.invoice_id)}')" class="py-2 rounded-md bg-surface-700 border border-surface-500 hover:bg-surface-600 text-gray-200 text-sm font-semibold">Open in Tab</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function setMissionInvoiceDecision(invoiceId, decision) {
+  state.rowDecisions[invoiceId] = decision;
+  const row = Array.from(document.querySelectorAll('#flagged-items-tbody tr'))
+    .find(tr => tr.dataset.invoiceId === String(invoiceId));
+  if (row) {
+    const cb = row.querySelector('.item-cb');
+    if (cb) cb.checked = decision === 'approve';
+    row.querySelectorAll('.row-decision-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.action === decision);
+    });
+  }
+  renderMissionInvoiceReview(findInvoiceItem(invoiceId));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -414,6 +414,7 @@ function resetUI() {
   state.vendorFlags = {};
   state.approvalLog = [];
   state.selectedFindingId = null;
+  state.selectedGateInvoiceId = null;
   state._lastPlan = '';
   state.pendingTimelineCards = {};
   state.activeToolCards = {};
@@ -434,6 +435,9 @@ function resetUI() {
   document.getElementById('gate-plan').classList.add('hidden');
   document.getElementById('gate-action').classList.add('hidden');
   document.getElementById('plan-edit-area').classList.remove('hidden');
+  document.getElementById('mission-invoice-review')?.classList.add('hidden');
+  document.getElementById('mission-dashboard-header')?.classList.remove('hidden');
+  document.getElementById('mission-dashboard-content')?.classList.remove('hidden');
 
   // Reset KPIs
   setKpiBaselineMode();
