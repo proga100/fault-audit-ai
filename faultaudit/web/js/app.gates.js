@@ -88,12 +88,26 @@ async function approvePlan() {
   const original = state._lastPlan || '';
   const changed = edited && edited !== original;
   recordApproval('plan', 'approved', changed ? 'Edited plan approved' : 'Plan approved');
-  await postApproval({ gate: 'plan', approved: true, ...(changed ? { edited_plan: edited } : {}) });
+  setStatusBadge('executing', 'Continuing…');
   document.getElementById('gate-plan').classList.add('hidden');
+  showPendingTimelineCard('plan-approved', {
+    label: 'Continuing',
+    agent: 'MissionPlanningAgent',
+    toolLabel: state.appStatus?.gemini_model || 'Gemini 3.x',
+    message: 'Plan approved. Agents are preparing evidence queries',
+  });
+  await postApproval({ gate: 'plan', approved: true, ...(changed ? { edited_plan: edited } : {}) });
 }
 async function rejectPlan() {
   recordApproval('plan', 'rejected', 'Plan rejected');
+  showPendingTimelineCard('plan-rejected', {
+    label: 'Sending',
+    agent: 'HumanApprovalAgent',
+    toolLabel: 'Approval gate',
+    message: 'Submitting plan rejection',
+  });
   await postApproval({ gate: 'plan', approved: false });
+  removePendingTimelineCard('plan-rejected');
   document.getElementById('gate-plan').classList.add('hidden');
 }
 
@@ -113,8 +127,14 @@ async function submitActionDecision() {
   });
   recordApproval('action', 'approved', `${approvedIds.length} approved, ${rejectedIds.length} rejected`);
   setStatusBadge('executing', 'Writing…');
-  await postApproval({ gate: 'action', approved: true, approved_ids: approvedIds, rejected_ids: rejectedIds });
   document.getElementById('gate-action').classList.add('hidden');
+  showPendingTimelineCard('action-approved', {
+    label: 'Writing',
+    agent: 'AuditTrailAgent',
+    toolLabel: 'MongoDB Atlas · gated write',
+    message: 'Writing approved findings and preparing the report',
+  });
+  await postApproval({ gate: 'action', approved: true, approved_ids: approvedIds, rejected_ids: rejectedIds });
 }
 
 function rejectAllAction() {
@@ -138,4 +158,3 @@ function recordApproval(gate, decision, detail) {
   state.approvalLog.unshift({ gate, decision, detail, ts: new Date().toISOString() });
   renderApprovalLog();
 }
-

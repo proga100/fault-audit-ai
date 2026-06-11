@@ -45,12 +45,14 @@ function dispatchEvent(type, evt) {
 // Event handlers
 // ─────────────────────────────────────────────────────────────────────────────
 function handlePlan(evt) {
+  removePendingTimelineCard('mission-start');
   setStatusBadge('planning', 'Plan received');
   const plan = evt.data?.plan || evt.data?.text || JSON.stringify(evt.data);
   appendTimelineCard('plan', { plan });
 }
 
 function handleToolCall(evt) {
+  removePendingTimelineCard('plan-approved');
   setStatusBadge('executing', 'Executing…');
   appendTimelineCard('tool_call', evt.data);
 }
@@ -68,6 +70,7 @@ function handleToolResult(evt) {
 }
 
 function handleProposal(evt) {
+  removePendingTimelineCard('plan-approved');
   const items = evt.data?.items || [];
   state.flaggedItems = items;
 
@@ -101,6 +104,8 @@ function handleProposal(evt) {
 
 function handleAwaitingApproval(evt) {
   const gate = evt.data?.gate;
+  if (gate === 'plan') removePendingTimelineCard('mission-start');
+  if (gate === 'action') removePendingTimelineCard('plan-approved');
   setStatusBadge('awaiting', `Awaiting ${gate} approval`);
   appendTimelineCard('awaiting_approval', evt.data);
 
@@ -120,6 +125,7 @@ function handleAwaitingApproval(evt) {
 }
 
 function handleWritten(evt) {
+  removePendingTimelineCard('action-approved');
   setStatusBadge('executing', 'Writing…');
   document.getElementById('gate-action').classList.add('hidden');
   state.flaggedItems.forEach(item => {
@@ -132,6 +138,7 @@ function handleWritten(evt) {
 }
 
 async function handleReportReady(evt) {
+  removePendingTimelineCard('action-approved');
   setStatusBadge('done', 'Report ready');
   appendTimelineCard('report_ready', evt.data);
   // Fetch the actual report
@@ -146,6 +153,7 @@ async function handleReportReady(evt) {
 }
 
 function handleError(evt) {
+  clearPendingTimelineCards();
   setStatusBadge('error', 'Error');
   appendTimelineCard('error', evt.data);
   const btn = document.getElementById('launch-btn');
@@ -154,6 +162,7 @@ function handleError(evt) {
 }
 
 function handleDone(evt) {
+  clearPendingTimelineCards();
   setStatusBadge('done', 'Done');
   appendTimelineCard('done', evt.data);
   if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
@@ -161,4 +170,3 @@ function handleDone(evt) {
   btn.disabled = false;
   btn.innerHTML = 'Run Audit Mission';
 }
-

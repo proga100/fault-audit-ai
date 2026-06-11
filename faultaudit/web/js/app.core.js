@@ -21,6 +21,7 @@ const state = {
   baselineStats: null,
   currentTab: 'mission',
   selectedFindingId: null,
+  pendingTimelineCards: {},
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,6 +104,12 @@ async function launchMission() {
   if (!text) { flashInput(); return; }
 
   resetUI();
+  showPendingTimelineCard('mission-start', {
+    label: 'Starting',
+    agent: 'FaultAuditCoordinatorAgent',
+    toolLabel: 'Google ADK multi-agent',
+    message: 'Connecting to the multi-agent runtime',
+  });
 
   const btn = document.getElementById('launch-btn');
   btn.disabled = true;
@@ -122,8 +129,15 @@ async function launchMission() {
     document.getElementById('run-id-display').classList.remove('hidden');
     document.getElementById('timeline-empty').classList.add('hidden');
     setStatusBadge('planning', 'Planning…');
+    updatePendingTimelineCard('mission-start', {
+      label: 'Planning',
+      agent: 'MissionPlanningAgent',
+      toolLabel: state.appStatus?.gemini_model || 'Gemini 3.x',
+      message: 'Gemini is drafting the first audit plan',
+    });
     startSSE(run_id);
   } catch (err) {
+    removePendingTimelineCard('mission-start');
     appendTimelineCard('error', { message: err.message });
     btn.disabled = false;
     btn.innerHTML = '<span>Run Audit Mission</span>';

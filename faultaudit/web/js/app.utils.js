@@ -379,6 +379,7 @@ function resetUI() {
   state.approvalLog = [];
   state.selectedFindingId = null;
   state._lastPlan = '';
+  state.pendingTimelineCards = {};
   if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
 
   // Reset timeline

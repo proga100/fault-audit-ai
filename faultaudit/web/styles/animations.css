@@ -25,11 +25,38 @@
   animation: timelineButtonAttention 0.75s cubic-bezier(.2,.8,.2,1);
 }
 
+@keyframes pendingShimmer {
+  0%   { transform: translateX(-100%); }
+  58%, 100% { transform: translateX(100%); }
+}
+
+@keyframes pendingPulse {
+  0%, 100% { transform: scale(0.86); opacity: 0.58; }
+  50%      { transform: scale(1.08); opacity: 1; }
+}
+
+@keyframes typingDot {
+  0%, 70%, 100% { transform: translateY(0); opacity: 0.32; }
+  35%           { transform: translateY(-3px); opacity: 1; }
+}
+
+@keyframes pendingExit {
+  to { opacity: 0; transform: translateY(-4px) scale(0.99); }
+}
+
+.timeline-card-pending-exit {
+  animation: pendingExit 0.16s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .timeline-card-enter,
   .fade-in,
   .timeline-attention,
-  .timeline-button-attention {
+  .timeline-button-attention,
+  .timeline-card-pending-exit,
+  .timeline-card-pending::after,
+  .pending-step::before,
+  .typing-dots span {
     animation: none;
   }
   .timeline-card,

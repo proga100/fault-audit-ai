@@ -13,6 +13,70 @@ const TYPE_META = {
   done:              { icon: '🏁', label: 'Done',           badge: 'bg-green-900/40 text-green-300 border-green-700/40' },
 };
 
+function showPendingTimelineCard(id, data) {
+  if (!id) return;
+  const existing = state.pendingTimelineCards?.[id];
+  if (existing) {
+    updatePendingTimelineCard(id, data);
+    return;
+  }
+
+  const card = document.createElement('div');
+  card.className = 'timeline-card timeline-card-pending timeline-card-enter rounded-lg bg-surface-800 border border-surface-600 p-3 pl-4';
+  card.dataset.pendingId = id;
+  card.innerHTML = pendingTimelineHtml(data);
+
+  state.pendingTimelineCards[id] = card;
+  document.getElementById('timeline-empty')?.classList.add('hidden');
+  document.querySelectorAll('.timeline-card.is-latest').forEach(el => el.classList.remove('is-latest'));
+  card.classList.add('is-latest');
+  document.getElementById('timeline').appendChild(card);
+  requestAnimationFrame(() => focusTimelineElement(card, { force: true, block: 'center' }));
+  setTimeout(() => focusTimelineElement(card, { force: true, block: 'center' }), 180);
+}
+
+function updatePendingTimelineCard(id, data) {
+  const card = state.pendingTimelineCards?.[id];
+  if (!card) {
+    showPendingTimelineCard(id, data);
+    return;
+  }
+  card.innerHTML = pendingTimelineHtml(data);
+  focusTimelineElement(card, { force: true, block: 'center' });
+}
+
+function removePendingTimelineCard(id) {
+  const card = state.pendingTimelineCards?.[id];
+  if (!card) return;
+  delete state.pendingTimelineCards[id];
+  card.classList.add('timeline-card-pending-exit');
+  setTimeout(() => card.remove(), 160);
+}
+
+function clearPendingTimelineCards() {
+  Object.keys(state.pendingTimelineCards || {}).forEach(removePendingTimelineCard);
+}
+
+function pendingTimelineHtml(data = {}) {
+  const label = data.label || 'Working';
+  const agent = data.agent || 'Agent runtime';
+  const toolLabel = data.toolLabel || '';
+  const message = data.message || 'Working on the next audit step';
+  return `
+    <div class="flex items-center gap-2 mb-0.5">
+      <span class="step-badge pending-step bg-brand-500/15 text-brand-200"></span>
+      <span class="pending-badge px-1.5 py-0.5 rounded border text-xs font-semibold">${escHtml(label)}</span>
+      <span class="agent-chip text-[10px]">${escHtml(agent)}</span>
+      ${toolLabel ? `<span class="tool-chip ${toolChipClass(toolLabel)} text-[10px]">${escHtml(toolLabel)}</span>` : ''}
+      <span class="ml-auto text-xs text-gray-600 font-mono">${tsNow()}</span>
+    </div>
+    <p class="pending-copy text-xs text-gray-300 mt-1">
+      ${escHtml(message)}<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+      <span class="sr-only">...</span>
+    </p>
+  `;
+}
+
 function appendTimelineCard(type, data) {
   state.stepCount++;
   const meta = TYPE_META[type] || { icon:'•', label: type, badge: 'bg-surface-700 text-gray-400 border-surface-500' };

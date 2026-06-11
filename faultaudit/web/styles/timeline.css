@@ -24,6 +24,54 @@
 .timeline-card.type-done       { border-left-color: #10b981; }
 .timeline-card.type-error      { border-left-color: #ef4444; }
 .timeline-card.type-awaiting_approval { border-left-color: #f59e0b; }
+.timeline-card-pending {
+  border-left-color: #3b82f6;
+  overflow: hidden;
+}
+.timeline-card-pending::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 0%, rgba(59,130,246,0.12) 42%, transparent 70%);
+  transform: translateX(-100%);
+  animation: pendingShimmer 1.7s ease-in-out infinite;
+}
+.pending-badge {
+  color: #bfdbfe;
+  border-color: rgba(59,130,246,0.45);
+  background: rgba(59,130,246,0.12);
+}
+.pending-step::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(96,165,250,0.14);
+  animation: pendingPulse 1.2s ease-in-out infinite;
+}
+.pending-copy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transform: translateY(1px);
+}
+.typing-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: #93c5fd;
+  opacity: 0.36;
+  animation: typingDot 1.05s ease-in-out infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.14s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.28s; }
 /* Similarity bar */
 .sim-bar-track {
   height: 4px;
