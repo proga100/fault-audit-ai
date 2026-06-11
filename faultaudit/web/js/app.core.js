@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadStats();
   renderFindingsView();
   renderApprovalLog();
+  document.getElementById('launch-btn')?.classList.add('timeline-button-attention');
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeAskDrawer();
   });
@@ -104,6 +105,7 @@ async function launchMission() {
   const text = document.getElementById('mission-input').value.trim();
   if (!text) { flashInput(); return; }
 
+  document.getElementById('onboarding-hint')?.remove();
   resetUI();
   showPendingTimelineCard('mission-start', {
     label: 'Starting',
