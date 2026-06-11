@@ -57,6 +57,36 @@ function clearPendingTimelineCards() {
   Object.keys(state.pendingTimelineCards || {}).forEach(removePendingTimelineCard);
 }
 
+function toolRunKey(data = {}) {
+  const tool = data.tool || data.tool_name || data.name || 'unknown';
+  const agent = data.adk_agent_name || data.agent || 'agent';
+  return `${agent}::${tool}`;
+}
+
+function markToolCallRunning(data, card) {
+  if (!card) return;
+  const key = toolRunKey(data);
+  state.activeToolCards[key] = card;
+  card.classList.add('tool-call-running');
+}
+
+function markToolCallComplete(data = {}) {
+  const directKey = toolRunKey(data);
+  const fallbackTool = data.tool || data.tool_name || data.name || '';
+  const card = state.activeToolCards[directKey] || Object.entries(state.activeToolCards)
+    .find(([key]) => fallbackTool && key.endsWith(`::${fallbackTool}`))?.[1];
+  if (!card) return;
+  Object.entries(state.activeToolCards).forEach(([key, value]) => {
+    if (value === card) delete state.activeToolCards[key];
+  });
+  card.classList.remove('tool-call-running');
+  card.classList.add('tool-call-complete');
+  const status = card.querySelector('[data-tool-call-status]');
+  if (status) {
+    status.innerHTML = 'Completed <span class="tool-done-dot" aria-hidden="true"></span>';
+  }
+}
+
 function pendingTimelineHtml(data = {}) {
   const label = data.label || 'Working';
   const agent = data.agent || 'Agent runtime';
@@ -97,6 +127,9 @@ function appendTimelineCard(type, data) {
     const args = data?.args || data?.input || {};
     bodyHtml = `
       <span class="text-xs font-mono text-purple-300 font-semibold">${escHtml(tool)}</span>
+      <span data-tool-call-status class="tool-call-status text-xs text-gray-400 ml-2">
+        Running<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+      </span>
       ${Object.keys(args).length ? `<pre class="text-xs text-gray-500 font-mono mt-1 bg-surface-700/50 rounded p-2 overflow-x-auto">${escHtml(JSON.stringify(args, null, 2))}</pre>` : ''}
     `;
   } else if (type === 'tool_result') {
@@ -160,4 +193,5 @@ function appendTimelineCard(type, data) {
   document.getElementById('timeline').appendChild(card);
   requestAnimationFrame(() => focusTimelineElement(card, { force: true, block: 'center' }));
   setTimeout(() => focusTimelineElement(card, { force: true, block: 'center' }), 180);
+  return card;
 }

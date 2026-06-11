@@ -380,6 +380,7 @@ function resetUI() {
   state.selectedFindingId = null;
   state._lastPlan = '';
   state.pendingTimelineCards = {};
+  state.activeToolCards = {};
   if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
 
   // Reset timeline

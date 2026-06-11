@@ -24,6 +24,35 @@
 .timeline-card.type-done       { border-left-color: #10b981; }
 .timeline-card.type-error      { border-left-color: #ef4444; }
 .timeline-card.type-awaiting_approval { border-left-color: #f59e0b; }
+.timeline-card.tool-call-running {
+  background: linear-gradient(90deg, rgba(139,92,246,0.16), rgba(22,27,34,1) 46%);
+  box-shadow: 0 0 0 1px rgba(139,92,246,0.18), 0 16px 38px rgba(0,0,0,0.20);
+}
+.timeline-card.tool-call-running::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 0%, rgba(168,85,247,0.12) 42%, transparent 70%);
+  transform: translateX(-100%);
+  animation: pendingShimmer 1.6s ease-in-out infinite;
+}
+.tool-call-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.tool-call-complete .tool-call-status {
+  color: #86efac;
+}
+.tool-done-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16,185,129,0.14);
+}
 .timeline-card-pending {
   border-left-color: #3b82f6;
   overflow: hidden;

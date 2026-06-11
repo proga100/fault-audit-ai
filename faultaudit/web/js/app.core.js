@@ -22,6 +22,7 @@ const state = {
   currentTab: 'mission',
   selectedFindingId: null,
   pendingTimelineCards: {},
+  activeToolCards: {},
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

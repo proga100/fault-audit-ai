@@ -54,10 +54,12 @@ function handlePlan(evt) {
 function handleToolCall(evt) {
   removePendingTimelineCard('plan-approved');
   setStatusBadge('executing', 'Executing…');
-  appendTimelineCard('tool_call', evt.data);
+  const card = appendTimelineCard('tool_call', evt.data);
+  markToolCallRunning(evt.data, card);
 }
 
 function handleToolResult(evt) {
+  markToolCallComplete(evt.data);
   appendTimelineCard('tool_result', evt.data);
 
   // Update KPI: vendors checked

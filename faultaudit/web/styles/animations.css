@@ -55,6 +55,7 @@
   .timeline-button-attention,
   .timeline-card-pending-exit,
   .timeline-card-pending::after,
+  .timeline-card.tool-call-running::after,
   .pending-step::before,
   .typing-dots span {
     animation: none;
