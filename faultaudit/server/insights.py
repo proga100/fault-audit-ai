@@ -174,10 +174,10 @@ def _template_answer(
     stats = get_stats()
     if report is None:
         return (
-            f"No audit run has completed in this session yet. The dataset in scope holds "
-            f"{stats['invoices']} invoices from {stats['vendors']} vendors "
-            f"(${stats['total_spend']:,.0f} total spend). Launch a mission from Mission "
-            f"Control and I can answer questions about the findings."
+            f"No completed audit run is available yet. Dataset in scope: "
+            f"{stats['invoices']} invoices, {stats['vendors']} vendors, "
+            f"${stats['total_spend']:,.0f} total spend. Run an audit mission first, "
+            "then I can cite flagged invoices, evidence, and next actions."
         )
     top = sorted(report.items, key=lambda i: i.amount, reverse=True)[:3]
     top_lines = "".join(
@@ -219,7 +219,9 @@ def answer_question(
         "next, and recommended action. You may derive practical verification steps from "
         "the supplied flags and evidence, but do not invent missing vendor documents, "
         "contracts, approvals, or source-system records. Only say context is missing for "
-        "specific factual claims not present in the evidence.\n\n"
+        "specific factual claims not present in the evidence. If no completed audit run is "
+        "available and no clicked invoice evidence is supplied, keep the answer to 2 short "
+        "sentences: state the dataset scope and tell the auditor to run a mission first.\n\n"
         f"CONTEXT:\n{context}\n\nQUESTION: {question.strip()}"
     )
     answer = llm.generate(prompt, fallback=fallback)
