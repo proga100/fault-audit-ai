@@ -88,6 +88,7 @@ function handleProposal(evt) {
     item._tool_label = evt.data?.tool_label || 'Internal detector fallback';
   });
 
+  setKpiAuditMode();
   animateKPICurrency('kpi-at-risk', state.atRisk);
   animateKPI('kpi-flags', total);
   renderDeptChart();

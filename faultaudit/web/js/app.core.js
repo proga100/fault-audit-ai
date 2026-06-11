@@ -84,6 +84,7 @@ function renderIntegrationStrip() {
 
 function seedBaselineKpis() {
   if (!state.baselineStats || state.runId) return;
+  setKpiBaselineMode();
   document.getElementById('kpi-at-risk').textContent = fmtCurrency(state.baselineStats.total_spend || 0);
   document.getElementById('kpi-flags').textContent = state.baselineStats.invoices ?? 0;
   document.getElementById('kpi-vendors').textContent = state.baselineStats.vendors ?? '—';

@@ -297,6 +297,42 @@ function setStatusBadge(type, text) {
   dot.className = `w-1.5 h-1.5 rounded-full ${colors[type] || 'bg-gray-400'}`;
 }
 
+function setKpiBaselineMode() {
+  setText('kpi-spend-label', 'Total Spend');
+  setText('kpi-spend-note', 'Baseline scope — run an audit to surface risk');
+  setText('kpi-flags-label', 'Invoices in Scope');
+  setText('kpi-flags-note', 'Baseline invoice count before findings');
+  setText('kpi-vendors-label', 'Vendors in Scope');
+  setText('kpi-vendors-note', 'Baseline vendor population');
+  setKpiColor('kpi-at-risk', 'text-gray-200');
+  setKpiColor('kpi-flags', 'text-gray-200');
+  setKpiColor('kpi-vendors', 'text-brand-300');
+}
+
+function setKpiAuditMode() {
+  setText('kpi-spend-label', 'At Risk');
+  setText('kpi-spend-note', 'Human-reviewed suspicious value');
+  setText('kpi-flags-label', 'Flags');
+  setText('kpi-flags-note', 'Suspicious invoices proposed by agents');
+  setText('kpi-vendors-label', 'Vendors Checked');
+  setText('kpi-vendors-note', 'Vendors touched by the audit run');
+  setKpiColor('kpi-at-risk', 'text-accent-red');
+  setKpiColor('kpi-flags', 'text-accent-orange');
+  setKpiColor('kpi-vendors', 'text-brand-300');
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function setKpiColor(id, colorClass) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('text-gray-200', 'text-accent-red', 'text-accent-orange', 'text-brand-300');
+  el.classList.add(colorClass);
+}
+
 function animateKPI(id, target) {
   const el = document.getElementById(id);
   const cur = parseInt(el.textContent.replace(/[^0-9]/g,'')) || 0;
@@ -400,6 +436,7 @@ function resetUI() {
   document.getElementById('plan-edit-area').classList.remove('hidden');
 
   // Reset KPIs
+  setKpiBaselineMode();
   document.getElementById('kpi-at-risk').textContent = '$0';
   document.getElementById('kpi-flags').textContent = '0';
   document.getElementById('kpi-vendors').textContent = '—';
