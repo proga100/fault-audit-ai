@@ -216,7 +216,10 @@ def answer_question(
         "audit console. Answer the auditor's question using ONLY the context below. Be "
         "concrete, cite invoice IDs and amounts, and keep it under 150 words. For invoice "
         "review questions, structure the answer as: why flagged, evidence, what to verify "
-        "next, and recommended action. If the context can't answer it, say so plainly.\n\n"
+        "next, and recommended action. You may derive practical verification steps from "
+        "the supplied flags and evidence, but do not invent missing vendor documents, "
+        "contracts, approvals, or source-system records. Only say context is missing for "
+        "specific factual claims not present in the evidence.\n\n"
         f"CONTEXT:\n{context}\n\nQUESTION: {question.strip()}"
     )
     answer = llm.generate(prompt, fallback=fallback)
