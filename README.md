@@ -3,12 +3,13 @@
 **An AI corporate-finance audit agent that hunts payment fraud — and keeps a human in control of every decision.**
 
 [![Live demo](https://img.shields.io/badge/Live%20demo-faultauditai.flance.info-2563eb)](https://faultauditai.flance.info/)
+[![Demo video](https://img.shields.io/badge/Demo%20video-YouTube-FF0000)](https://youtu.be/u69DFlnDZnA)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue)](LICENSE)
 [![Track: MongoDB](https://img.shields.io/badge/Hackathon-MongoDB%20track-00ED64)](https://rapid-agent.devpost.com/)
 
 Built for the **Google Cloud Rapid Agent Hackathon** (MongoDB track). A multi-agent team on **Google Vertex AI Agent Builder (ADK) + Gemini 3**, with **MongoDB Atlas Vector Search** as its superpower, read through the official **MongoDB MCP server**.
 
-> **Live:** https://faultauditai.flance.info/ · **Code:** https://github.com/proga100/fault-audit-ai
+> **Live:** https://faultauditai.flance.info/ · **Demo video:** https://youtu.be/u69DFlnDZnA · **Code:** https://github.com/proga100/fault-audit-ai
 
 ---
 
@@ -23,6 +24,10 @@ FaultAuditAI takes a plain-English mission ("Audit this month's vendor payments"
 ---
 
 ## Demo options
+
+### Watch the 3-minute demo video
+
+**▶ https://youtu.be/u69DFlnDZnA** — a guided walkthrough of a full audit mission: plan approval, live MCP-powered investigation, flagged findings, human approval, and the final report.
 
 ### 1. Hosted live demo (recommended)
 
@@ -301,6 +306,7 @@ embed_and_load.py · create_vector_index.py · vector_index.json
 ## Links
 
 - **Live demo:** https://faultauditai.flance.info/
+- **Demo video:** https://youtu.be/u69DFlnDZnA
 - **Repository:** https://github.com/proga100/fault-audit-ai
 - **Hackathon:** [Google Cloud Rapid Agent Hackathon](https://rapid-agent.devpost.com/) — MongoDB track
 - **License:** [GPL-3.0](LICENSE) © 2026 Rustamjon Akhmedov
