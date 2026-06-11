@@ -82,10 +82,20 @@
 /* Timeline cards */
 .timeline-card {
   border-left: 2px solid transparent;
-  transition: border-color 0.2s;
+  position: relative;
+  transform-origin: top center;
+  transition: border-color 0.2s, background 0.25s, box-shadow 0.25s, transform 0.25s;
   padding: 9px 10px 9px 12px !important;
 }
-.timeline-card:hover { border-left-color: #3b82f6; }
+.timeline-card:hover {
+  border-left-color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+}
+.timeline-card.is-latest {
+  background: linear-gradient(90deg, rgba(37,99,235,0.14), rgba(22,27,34,1) 42%);
+  box-shadow: 0 0 0 1px rgba(59,130,246,0.14), 0 18px 42px rgba(0,0,0,0.20);
+}
 .timeline-card.type-plan       { border-left-color: #3b82f6; }
 .timeline-card.type-tool_call  { border-left-color: #8b5cf6; }
 .timeline-card.type-tool_result{ border-left-color: #06b6d4; }
@@ -253,12 +263,46 @@
   border-bottom: 1px solid rgba(48,54,61,0.8);
 }
 
-/* Fade-in for new cards */
+/* Timeline entrance and attention animations */
 @keyframes fadeInUp {
-  from { opacity:0; transform: translateY(8px); }
-  to   { opacity:1; transform: translateY(0); }
+  0%   { opacity:0; transform: translateY(14px) scale(.985); filter: blur(2px); }
+  62%  { opacity:1; transform: translateY(-1px) scale(1.004); filter: blur(0); }
+  100% { opacity:1; transform: translateY(0) scale(1); filter: blur(0); }
 }
-.fade-in { animation: fadeInUp 0.3s ease-out; }
+.timeline-card-enter { animation: fadeInUp 0.42s cubic-bezier(.2,.8,.2,1); }
+.fade-in { animation: fadeInUp 0.42s cubic-bezier(.2,.8,.2,1); }
+
+@keyframes timelineAttention {
+  0%   { box-shadow: 0 0 0 0 rgba(59,130,246,0.48); transform: translateY(10px) scale(.99); }
+  45%  { box-shadow: 0 0 0 5px rgba(59,130,246,0.16), 0 18px 40px rgba(0,0,0,0.24); transform: translateY(0) scale(1.006); }
+  100% { box-shadow: 0 0 0 1px rgba(59,130,246,0.12); transform: translateY(0) scale(1); }
+}
+.timeline-attention {
+  animation: timelineAttention 0.75s cubic-bezier(.2,.8,.2,1);
+}
+
+@keyframes timelineButtonAttention {
+  0%   { box-shadow: 0 0 0 0 rgba(59,130,246,0.55); transform: translateY(4px); }
+  48%  { box-shadow: 0 0 0 5px rgba(59,130,246,0.18), 0 10px 28px rgba(0,0,0,0.24); transform: translateY(0); }
+  100% { box-shadow: 0 0 0 1px rgba(59,130,246,0.12); transform: translateY(0); }
+}
+.timeline-button-attention {
+  animation: timelineButtonAttention 0.75s cubic-bezier(.2,.8,.2,1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-card-enter,
+  .fade-in,
+  .timeline-attention,
+  .timeline-button-attention {
+    animation: none;
+  }
+  .timeline-card,
+  .timeline-card:hover {
+    transition: none;
+    transform: none;
+  }
+}
 
 /* Status badge colors */
 .status-planning  { color: #3b82f6; }

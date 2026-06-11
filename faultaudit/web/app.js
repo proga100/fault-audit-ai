@@ -240,19 +240,21 @@ function handleProposal(evt) {
 function handleAwaitingApproval(evt) {
   const gate = evt.data?.gate;
   setStatusBadge('awaiting', `Awaiting ${gate} approval`);
+  appendTimelineCard('awaiting_approval', evt.data);
 
   if (gate === 'plan') {
     const plan = evt.data?.plan || state._lastPlan || '';
     document.getElementById('plan-edit-input').value = plan;
     document.getElementById('plan-edit-area').classList.remove('hidden');
-    document.getElementById('gate-plan').classList.remove('hidden');
-    scrollTimeline();
+    const gateEl = document.getElementById('gate-plan');
+    gateEl.classList.remove('hidden');
+    focusTimelineGate(gateEl);
   } else if (gate === 'action') {
     renderFlaggedTable();
-    document.getElementById('gate-action').classList.remove('hidden');
-    scrollTimeline();
+    const gateEl = document.getElementById('gate-action');
+    gateEl.classList.remove('hidden');
+    focusTimelineGate(gateEl);
   }
-  appendTimelineCard('awaiting_approval', evt.data);
 }
 
 function handleWritten(evt) {
@@ -318,7 +320,7 @@ function appendTimelineCard(type, data) {
   const meta = TYPE_META[type] || { icon:'•', label: type, badge: 'bg-surface-700 text-gray-400 border-surface-500' };
 
   const card = document.createElement('div');
-  card.className = `timeline-card type-${type} fade-in rounded-lg bg-surface-800 border border-surface-600 p-3 pl-4`;
+  card.className = `timeline-card type-${type} timeline-card-enter rounded-lg bg-surface-800 border border-surface-600 p-3 pl-4`;
 
   let bodyHtml = '';
 
@@ -391,8 +393,11 @@ function appendTimelineCard(type, data) {
     ${bodyHtml}
   `;
 
+  document.querySelectorAll('.timeline-card.is-latest').forEach(el => el.classList.remove('is-latest'));
+  card.classList.add('is-latest');
   document.getElementById('timeline').appendChild(card);
-  scrollTimeline();
+  requestAnimationFrame(() => focusTimelineElement(card, { force: true, block: 'center' }));
+  setTimeout(() => focusTimelineElement(card, { force: true, block: 'center' }), 180);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1730,8 +1735,40 @@ function animateKPICurrency(id, target) {
 }
 
 function scrollTimeline() {
-  const tl = document.getElementById('timeline');
-  if (tl) tl.scrollTop = tl.scrollHeight;
+  const pane = document.getElementById('timeline-scroll');
+  if (!pane) return;
+  pane.scrollTo({ top: pane.scrollHeight, behavior: 'smooth' });
+}
+
+function focusTimelineElement(el, opts = {}) {
+  if (!el) return;
+  const pane = document.getElementById('timeline-scroll');
+  if (!pane) return;
+  const distanceFromBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight;
+  const nearBottom = distanceFromBottom < 180;
+  if (opts.force || nearBottom) {
+    el.scrollIntoView({ behavior: 'smooth', block: opts.block || 'end', inline: 'nearest' });
+  }
+  if (opts.attention) {
+    el.classList.remove('timeline-attention');
+    void el.offsetWidth;
+    el.classList.add('timeline-attention');
+  }
+}
+
+function focusTimelineGate(gateEl) {
+  if (!gateEl) return;
+  focusTimelineElement(gateEl, { force: true, attention: true, block: 'end' });
+  const primary = gateEl.querySelector('[data-timeline-primary]');
+  if (!primary) return;
+  const focusPrimary = () => {
+    focusTimelineElement(primary, { force: true, block: 'end' });
+    primary.classList.remove('timeline-button-attention');
+    void primary.offsetWidth;
+    primary.classList.add('timeline-button-attention');
+  };
+  requestAnimationFrame(focusPrimary);
+  setTimeout(focusPrimary, 220);
 }
 
 function resetUI() {

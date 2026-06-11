@@ -123,7 +123,7 @@
     </div>
 
     <!-- Step timeline -->
-    <div class="order-first flex-1 overflow-y-auto">
+    <div id="timeline-scroll" class="order-first flex-1 overflow-y-auto scroll-smooth">
       <div class="px-4 py-3 flex items-center gap-2 border-b border-surface-700">
         <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
         <span class="text-xs text-gray-500 font-medium uppercase tracking-wider">Live Step Timeline</span>
@@ -153,7 +153,7 @@
             <textarea id="plan-edit-input" rows="6" class="w-full bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-sm text-gray-100 font-mono resize-none focus:outline-none focus:ring-1 focus:ring-brand-400 mb-3 leading-relaxed"></textarea>
           </div>
           <div class="flex gap-2 mb-2">
-            <button onclick="approvePlan()" class="flex-1 py-2 rounded-lg bg-accent-green/20 border border-accent-green/40 text-accent-green text-sm font-semibold hover:bg-accent-green/30 transition-colors">Approve Plan</button>
+            <button id="approve-plan-btn" data-timeline-primary onclick="approvePlan()" class="flex-1 py-2 rounded-lg bg-accent-green/20 border border-accent-green/40 text-accent-green text-sm font-semibold hover:bg-accent-green/30 transition-colors">Approve Plan</button>
             <button onclick="focusPlanEditor()" class="px-4 py-2 rounded-lg bg-surface-700 border border-surface-500 text-gray-300 text-sm font-semibold hover:border-gray-400 transition-colors">Edit</button>
             <button onclick="rejectPlan()" class="px-4 py-2 rounded-lg bg-accent-red/20 border border-accent-red/40 text-accent-red text-sm font-semibold hover:bg-accent-red/30 transition-colors">Reject</button>
           </div>
@@ -190,7 +190,7 @@
           </div>
 
           <div class="flex gap-2 mt-3">
-            <button onclick="submitActionDecision()" class="flex-[2] py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-400 transition-colors">✓ Approve &amp; Write</button>
+            <button id="approve-action-btn" data-timeline-primary onclick="submitActionDecision()" class="flex-[2] py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-400 transition-colors">✓ Approve &amp; Write</button>
             <button onclick="rejectAllAction()" class="flex-1 py-2.5 rounded-lg bg-surface-700 border border-surface-600 text-gray-300 text-sm font-medium hover:bg-surface-600 transition-colors">Reject All</button>
           </div>
         </div>
