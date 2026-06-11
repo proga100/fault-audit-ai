@@ -1,6 +1,6 @@
 """FaultAuditAI - synthetic corporate finance data generator.
 
-Generates a license-safe (Apache-2.0) corporate ledger with injected fraud so the
+Generates a license-safe (GPL-3.0) corporate ledger with injected fraud so the
 audit agent has something real to find. Deliberately seeds *near*-duplicates and a
 handful of labeled "known fraud exemplars" so semantic vector search beats a plain
 GROUP BY.

@@ -84,7 +84,7 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 3. Provide Google credentials (a service-account key with the *Vertex AI User* role, or `gcloud auth application-default login`).
 4. Load data and build the vector index:
    ```bash
-   python demo_dataset/generate_data.py      # synthetic, Apache-2.0 corporate ledger
+   python demo_dataset/generate_data.py      # synthetic, GPL-3.0 corporate ledger
    python embed_and_load.py                  # embed + load to Atlas
    python create_vector_index.py             # create the Atlas Vector Search index
    ```
@@ -104,7 +104,7 @@ docker run -p 8080:8080 \
 
 ## Data & licensing
 
-No public dataset is simultaneously corporate-grade, fraud-labeled, and commercially licensed, so FaultAuditAI ships a **synthetic** corporate ledger generated with [Faker](https://faker.readthedocs.io/) ([`demo_dataset/generate_data.py`](demo_dataset/generate_data.py)) — vendors, invoices, policies, and injected fraud (duplicates, near-duplicates, ghost vendors, policy violations, off-hours payments). Fully Apache-2.0, fully reproducible.
+No public dataset is simultaneously corporate-grade, fraud-labeled, and commercially licensed, so FaultAuditAI ships a **synthetic** corporate ledger generated with [Faker](https://faker.readthedocs.io/) ([`demo_dataset/generate_data.py`](demo_dataset/generate_data.py)) — vendors, invoices, policies, and injected fraud (duplicates, near-duplicates, ghost vendors, policy violations, off-hours payments). Fully GPL-3.0, fully reproducible.
 
 ## Tests
 
@@ -129,4 +129,4 @@ embed_and_load.py · create_vector_index.py · vector_index.json
 
 ## License
 
-[Apache-2.0](LICENSE) © 2026 Rustamjon Akhmedov.
+[GPL-3.0](LICENSE) © 2026 Rustamjon Akhmedov.
