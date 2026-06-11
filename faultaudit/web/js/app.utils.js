@@ -315,7 +315,7 @@ function setKpiAuditMode() {
   setText('kpi-flags-label', 'Flags');
   setText('kpi-flags-note', 'Suspicious invoices proposed by agents');
   setText('kpi-vendors-label', 'Vendors Checked');
-  setText('kpi-vendors-note', 'Vendors touched by the audit run');
+  setText('kpi-vendors-note', 'Vendor population scanned for this run');
   setKpiColor('kpi-at-risk', 'text-accent-red');
   setKpiColor('kpi-flags', 'text-accent-orange');
   setKpiColor('kpi-vendors', 'text-brand-300');

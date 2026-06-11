@@ -61,14 +61,6 @@ function handleToolCall(evt) {
 function handleToolResult(evt) {
   markToolCallComplete(evt.data);
   appendTimelineCard('tool_result', evt.data);
-
-  // Update KPI: vendors checked
-  if (evt.data?.count != null) {
-    animateKPI('kpi-vendors', evt.data.count);
-  }
-  if (evt.data?.vendor_count != null) {
-    animateKPI('kpi-vendors', evt.data.vendor_count);
-  }
 }
 
 function handleProposal(evt) {
@@ -91,6 +83,12 @@ function handleProposal(evt) {
   setKpiAuditMode();
   animateKPICurrency('kpi-at-risk', state.atRisk);
   animateKPI('kpi-flags', total);
+  const vendorsChecked = evt.data?.vendors_checked
+    ?? evt.data?.vendor_count
+    ?? state.baselineStats?.vendors
+    ?? Object.keys(state.vendorFlags).length
+    ?? 0;
+  animateKPI('kpi-vendors', vendorsChecked);
   renderDeptChart();
   renderVendorChart();
 
