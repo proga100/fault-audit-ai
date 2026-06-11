@@ -121,7 +121,7 @@ def stats() -> dict:
 def ask(body: AskRequest) -> AskResponse:
     store = _get_store()
     report = store.get_report(body.run_id) if body.run_id else store.newest_report()
-    return insights.answer_question(body.question, report)
+    return insights.answer_question(body.question, report, body.invoice_context)
 
 
 @app.post("/api/mission", response_model=MissionStarted)

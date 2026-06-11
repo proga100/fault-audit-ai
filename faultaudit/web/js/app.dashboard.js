@@ -119,6 +119,7 @@ function renderFindingDetail(item) {
   const sim = item.similarity != null ? Math.max(0, Math.min(100, Math.round(item.similarity * 100))) : null;
   const detailLines = String(item.detail || 'No detail supplied.').split(';').map(s => s.trim()).filter(Boolean);
   const previewHtml = escAttr(buildInvoiceDocumentHtml(item, { embedded: true }));
+  const explanation = renderInvoiceExplanationBlock(item);
   el.innerHTML = `
     <div class="space-y-4">
       <div>
@@ -147,9 +148,12 @@ function renderFindingDetail(item) {
         <p class="mt-1 text-[11px] text-gray-600">Preview generated from audit evidence. Attach source PDFs later to replace this document.</p>
       </div>
       <div class="grid grid-cols-2 gap-2">
-        <button onclick="explainInvoiceDocument('${escAttr(item.invoice_id)}')" class="py-2 rounded-md bg-brand-500 hover:bg-brand-400 text-white text-sm font-semibold">Explain PDF with AI</button>
+        <button onclick="explainInvoiceDocument('${escAttr(item.invoice_id)}')" ${state.invoiceExplainLoading[item.invoice_id] ? 'disabled' : ''} class="py-2 rounded-md bg-brand-500 hover:bg-brand-400 disabled:opacity-60 disabled:cursor-wait text-white text-sm font-semibold">
+          ${state.invoiceExplainLoading[item.invoice_id] ? 'Explaining…' : 'Explain PDF with AI'}
+        </button>
         <button onclick="openInvoiceDocument('${escAttr(item.invoice_id)}')" class="py-2 rounded-md bg-surface-700 border border-surface-500 hover:bg-surface-600 text-gray-200 text-sm font-semibold">Open in Tab</button>
       </div>
+      ${explanation}
     </div>
   `;
 }

@@ -139,6 +139,31 @@ async def test_ask_demo_mode_returns_grounded_answer(client: AsyncClient) -> Non
 
 
 @pytest.mark.anyio
+async def test_ask_invoice_context_answers_before_report(client: AsyncClient) -> None:
+    resp = await client.post(
+        "/api/ask",
+        json={
+            "question": "Explain this invoice",
+            "run_id": "run-before-report",
+            "invoice_context": {
+                "invoice_id": "INV-777",
+                "vendor_name": "Ghost LLC",
+                "department": "IT",
+                "amount": 125000,
+                "reasons": ["ghost_vendor", "policy_violation"],
+                "detail": "P4: 125000 > 100000; payment to ghost vendor",
+            },
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    answer = body["answer"].lower()
+    assert "inv-777" in answer
+    assert "ghost llc" in answer
+    assert "no audit run has completed" not in answer
+
+
+@pytest.mark.anyio
 async def test_ask_validation(client: AsyncClient) -> None:
     empty = await client.post("/api/ask", json={"question": ""})
     assert empty.status_code == 422

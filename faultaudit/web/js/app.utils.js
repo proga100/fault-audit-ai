@@ -409,6 +409,8 @@ function resetUI() {
   state.atRisk = 0;
   state.rowDecisions = {};
   state.itemStatuses = {};
+  state.invoiceExplanations = {};
+  state.invoiceExplainLoading = {};
   state.report = null;
   state.deptCounts = {};
   state.vendorFlags = {};

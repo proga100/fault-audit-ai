@@ -166,6 +166,7 @@ class AskRequest(BaseModel):
 
     question: str = Field(min_length=1, max_length=2000)
     run_id: Optional[str] = None
+    invoice_context: Optional[dict[str, Any]] = None
 
 
 class AskResponse(BaseModel):

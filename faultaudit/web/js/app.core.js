@@ -13,6 +13,8 @@ const state = {
   atRisk: 0,
   rowDecisions: {},      // invoice_id -> 'approve' | 'reject'
   itemStatuses: {},      // invoice_id -> pending | approved | rejected
+  invoiceExplanations: {},
+  invoiceExplainLoading: {},
   report: null,
   deptCounts: {},
   vendorFlags: {},

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from functools import lru_cache
-from typing import Optional
+from typing import Any, Optional
 
 from faultaudit.config import DATA_DIR, get_settings
 from faultaudit.models import AskResponse, AuditReport
@@ -117,8 +117,60 @@ def _run_context(report: Optional[AuditReport]) -> str:
     return "\n".join(lines)
 
 
-def _template_answer(question: str, report: Optional[AuditReport]) -> str:
+def _invoice_context_lines(invoice_context: Optional[dict[str, Any]]) -> list[str]:
+    """Compact invoice evidence block supplied by the UI during Gate 2 review."""
+    if not invoice_context:
+        return []
+    reasons = invoice_context.get("reasons") or []
+    if isinstance(reasons, str):
+        reasons_text = reasons
+    else:
+        reasons_text = ", ".join(str(r).replace("_", " ") for r in reasons)
+    amount = invoice_context.get("amount") or 0
+    try:
+        amount_text = f"${float(amount):,.0f}"
+    except (TypeError, ValueError):
+        amount_text = str(amount)
+    return [
+        "Clicked invoice evidence:",
+        f"- invoice_id: {invoice_context.get('invoice_id', 'unknown')}",
+        f"- vendor: {invoice_context.get('vendor_name', 'unknown')}",
+        f"- department: {invoice_context.get('department', 'unknown')}",
+        f"- amount: {amount_text}",
+        f"- reasons: {reasons_text or 'not supplied'}",
+        f"- evidence: {invoice_context.get('detail') or 'not supplied'}",
+    ]
+
+
+def _template_invoice_answer(invoice_context: dict[str, Any]) -> str:
+    reasons = invoice_context.get("reasons") or []
+    reasons_text = ", ".join(str(r).replace("_", " ") for r in reasons) if not isinstance(reasons, str) else reasons
+    amount = invoice_context.get("amount") or 0
+    try:
+        amount_text = f"${float(amount):,.0f}"
+    except (TypeError, ValueError):
+        amount_text = str(amount)
+    detail = invoice_context.get("detail") or "No detailed evidence was supplied."
+    invoice_id = invoice_context.get("invoice_id", "this invoice")
+    vendor = invoice_context.get("vendor_name", "the vendor")
+    dept = invoice_context.get("department", "the department")
+    return (
+        f"Invoice {invoice_id} from {vendor} ({dept}) is flagged for "
+        f"{reasons_text or 'audit risk'} on a {amount_text} payment. Evidence: {detail}. "
+        "The auditor should verify the vendor master record, PO or contract approval, "
+        "duplicate invoice history, payment authorization, and whether the policy threshold "
+        "or exception approval is documented before approving the item."
+    )
+
+
+def _template_answer(
+    question: str,
+    report: Optional[AuditReport],
+    invoice_context: Optional[dict[str, Any]] = None,
+) -> str:
     """Deterministic grounded answer used in demo mode / as the LLM fallback."""
+    if invoice_context:
+        return _template_invoice_answer(invoice_context)
     stats = get_stats()
     if report is None:
         return (
@@ -142,21 +194,30 @@ def _template_answer(question: str, report: Optional[AuditReport]) -> str:
     )
 
 
-def answer_question(question: str, report: Optional[AuditReport]) -> AskResponse:
+def answer_question(
+    question: str,
+    report: Optional[AuditReport],
+    invoice_context: Optional[dict[str, Any]] = None,
+) -> AskResponse:
     """Answer via Gemini when live, else via the grounded template."""
     s = get_settings()
-    fallback = _template_answer(question, report)
+    fallback = _template_answer(question, report, invoice_context)
     if s.use_mocks or not s.gcp_project:
         return AskResponse(answer=fallback, model="demo-template")
 
     from faultaudit.agent import llm
 
+    context = "\n".join([
+        _run_context(report),
+        *_invoice_context_lines(invoice_context),
+    ])
     prompt = (
         "You are the AI Audit Assistant inside FaultAuditAI, a corporate-finance fraud "
         "audit console. Answer the auditor's question using ONLY the context below. Be "
-        "concrete, cite invoice IDs and amounts, and keep it under 150 words. If the "
-        "context can't answer it, say so plainly.\n\n"
-        f"CONTEXT:\n{_run_context(report)}\n\nQUESTION: {question.strip()}"
+        "concrete, cite invoice IDs and amounts, and keep it under 150 words. For invoice "
+        "review questions, structure the answer as: why flagged, evidence, what to verify "
+        "next, and recommended action. If the context can't answer it, say so plainly.\n\n"
+        f"CONTEXT:\n{context}\n\nQUESTION: {question.strip()}"
     )
     answer = llm.generate(prompt, fallback=fallback)
     return AskResponse(answer=answer, model=s.gemini_model)

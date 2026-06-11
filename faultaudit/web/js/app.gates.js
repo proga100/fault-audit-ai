@@ -121,6 +121,7 @@ function renderMissionInvoiceReview(item) {
   const detailLines = String(item.detail || 'No detail supplied.').split(';').map(s => s.trim()).filter(Boolean);
   const decision = state.rowDecisions[item.invoice_id] || 'approve';
   const previewHtml = escAttr(buildInvoiceDocumentHtml(item, { embedded: true }));
+  const explanation = renderInvoiceExplanationBlock(item);
   el.innerHTML = `
     <div class="rounded-xl bg-surface-800 border border-surface-600 overflow-hidden fade-in">
       <div class="px-4 py-3 border-b border-surface-600 bg-surface-700/50 flex items-center gap-3">
@@ -166,10 +167,50 @@ function renderMissionInvoiceReview(item) {
           <iframe class="invoice-preview-frame" title="Invoice preview ${escAttr(item.invoice_id)}" srcdoc="${previewHtml}"></iframe>
         </div>
         <div class="grid grid-cols-2 gap-2">
-          <button onclick="explainInvoiceDocument('${escAttr(item.invoice_id)}')" class="py-2 rounded-md bg-brand-500 hover:bg-brand-400 text-white text-sm font-semibold">Explain with AI</button>
+          <button onclick="explainInvoiceDocument('${escAttr(item.invoice_id)}')" ${state.invoiceExplainLoading[item.invoice_id] ? 'disabled' : ''} class="py-2 rounded-md bg-brand-500 hover:bg-brand-400 disabled:opacity-60 disabled:cursor-wait text-white text-sm font-semibold">
+            ${state.invoiceExplainLoading[item.invoice_id] ? 'Explaining…' : 'Explain with AI'}
+          </button>
           <button onclick="openInvoiceDocument('${escAttr(item.invoice_id)}')" class="py-2 rounded-md bg-surface-700 border border-surface-500 hover:bg-surface-600 text-gray-200 text-sm font-semibold">Open in Tab</button>
         </div>
+        ${explanation}
       </div>
+    </div>
+  `;
+}
+
+function renderInvoiceExplanationBlock(item) {
+  const loading = state.invoiceExplainLoading[item.invoice_id];
+  const explanation = state.invoiceExplanations[item.invoice_id];
+  if (loading) {
+    return `
+      <div class="rounded-lg border border-brand-500/40 bg-brand-900/20 p-4">
+        <div class="flex items-center gap-2 text-sm font-semibold text-brand-200">
+          <span class="pending-step step-badge bg-brand-500/15"></span>
+          AuditAssistantAgent
+          <span class="tool-chip text-[10px]">${escHtml(state.appStatus?.gemini_model || 'Gemini 3.x')}</span>
+        </div>
+        <p class="mt-2 text-sm text-gray-300">
+          Reading invoice evidence and preparing auditor guidance<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+        </p>
+      </div>
+    `;
+  }
+  if (!explanation) {
+    return `
+      <div class="rounded-lg border border-surface-600 bg-surface-700/30 p-4">
+        <p class="text-xs text-gray-500 uppercase tracking-wide">AI Explanation</p>
+        <p class="mt-2 text-sm text-gray-400">Use Explain with AI to generate a grounded invoice review from the evidence above.</p>
+      </div>
+    `;
+  }
+  return `
+    <div class="rounded-lg border border-brand-500/40 bg-brand-900/20 p-4">
+      <div class="flex items-center gap-2">
+        <p class="text-xs text-brand-200 uppercase tracking-wide font-semibold">AI Explanation</p>
+        <span class="ml-auto text-[11px] text-gray-500">${escHtml(explanation.model || state.appStatus?.gemini_model || 'Gemini 3.x')}</span>
+      </div>
+      <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-200">${escHtml(explanation.answer)}</p>
+      <p class="mt-3 text-[11px] text-gray-500">AI-generated — requires human review before approval.</p>
     </div>
   `;
 }
