@@ -22,6 +22,49 @@ FaultAuditAI takes a plain-English mission ("Audit this month's vendor payments"
 
 ---
 
+## Demo options
+
+### 1. Hosted live demo (recommended)
+
+The recommended way to evaluate FaultAuditAI is the hosted live demo:
+
+**https://faultauditai.flance.info/**
+
+It shows the full user experience: mission creation, AI audit planning, human approval gates, tool execution, flagged findings, final review, audit reporting, and audit logging.
+
+### 2. Reproducible local demo (mock mode, no cloud credentials)
+
+The repository also includes a local mock/demo mode so judges and reviewers can verify the project without cloud credentials. It is useful if the hosted demo is unavailable, cloud quotas are exhausted, external services are temporarily down, or you simply want to run the project from source.
+
+```bash
+docker build -t faultaudit .
+docker run -p 8080:8080 faultaudit
+# open http://localhost:8080
+```
+
+Mock mode demonstrates the same core workflow: mission planning, plan approval, streaming tool calls, flagged payment review, final approval, audit report, and audit log.
+
+For the full live version, set `USE_MOCKS=false` and provide MongoDB Atlas and Google Cloud Vertex AI credentials (see [Quickstart](#quickstart)). Live mode uses Gemini, MongoDB Atlas Vector Search, and the official MongoDB MCP server.
+
+---
+
+## Why this fits the Google Cloud Rapid Agent Hackathon
+
+FaultAuditAI was built as a **multi-step finance audit agent, not a simple chatbot.** It accepts a plain-English audit mission, creates an execution plan, asks for human approval, runs specialist audit tools, investigates transaction data, checks vendor and payment risks, generates an evidence-backed report, and records an audit trail.
+
+It fits the hackathon because it demonstrates:
+
+- **Agentic workflow** — the agent plans, executes, calls tools, collects evidence, ranks risks, and reports results.
+- **Google Cloud / Gemini usage** — Gemini handles reasoning, planning, summarization, risk explanation, and report generation.
+- **MongoDB MCP integration** — MongoDB MCP gives the agent a controlled, read-only way to inspect and query financial data.
+- **MongoDB Atlas Vector Search** — similar or suspicious transactions are discovered by semantic similarity, not only exact matching.
+- **Human-in-the-loop control** — the system asks for approval before executing the plan and before writing flagged findings.
+- **Real-world finance impact** — it targets duplicate payments, suspicious vendors, unusual amounts, policy anomalies, and sanctions-related vendor risk.
+
+The project shows how AI agents can support sensitive finance workflows while keeping the human responsible for final decisions.
+
+---
+
 ## Architecture
 
 <p align="center">
@@ -126,15 +169,7 @@ Google Vertex AI Agent Builder (ADK / `google.adk`) · Gemini 3 (`gemini-3.1-pro
 
 ## Quickstart
 
-### Run with Docker (mock mode — no credentials needed)
-
-```bash
-docker build -t faultaudit .
-docker run -p 8080:8080 faultaudit
-# open http://localhost:8080
-```
-
-Mock mode runs the full UX — plan gate, streaming tool calls, per-item approval, report — on a scripted runner, so you can see the whole experience instantly.
+> For the fastest no-credentials demo, see [Demo options](#demo-options) above (`docker run`). This section covers local development and live mode.
 
 ### Run locally (mock mode)
 
@@ -217,6 +252,28 @@ The suite (in-memory MongoDB via `mongomock`) covers the policy engine, exact + 
 </p>
 
 The time-ordered view of a live run: vector search and aggregation go through the **MongoDB MCP server** to Atlas, while the detectors and the gated write use the direct driver. The two human gates interrupt between planning and investigation, and again before the write.
+
+---
+
+## Judging criteria alignment
+
+### Technological Implementation
+A multi-step agent workflow built around Google Cloud, Gemini, MongoDB Atlas, and MongoDB MCP. The system does more than answer questions: it accepts an audit mission, creates an execution plan, waits for human approval, runs audit tools, screens transactions, checks vendor risk, identifies duplicate-like payments, generates an audit report, and records an audit trail. MongoDB MCP is the agent's evidence layer for database inspection, transaction search, aggregation, and Atlas Vector Search; Gemini / Google Cloud handles planning, reasoning, summarization, risk explanation, and report generation. The project also separates mock/demo mode from live mode, making it both easy to evaluate and practical to connect to real cloud services.
+
+### Design
+The user experience is designed around **trust, clarity, and control.** Finance and audit users should not have to trust a black-box AI system. FaultAuditAI shows what the agent plans to do, which tools are being used, what evidence was found, and which findings require approval:
+
+```
+User mission → AI audit plan → Human approval → Tool execution → Risk findings → Final human approval → Audit report
+```
+
+This keeps the product understandable for finance managers, auditors, and non-technical reviewers.
+
+### Potential Impact
+Payment fraud, duplicate vendor payments, suspicious invoices, and sanctions-related vendor risk are real problems for finance and internal-audit teams. FaultAuditAI can reduce manual review time, make payment audits more consistent, and give teams a repeatable, evidence-based workflow — especially valuable for small and mid-sized companies without large internal-audit departments or expensive enterprise fraud systems. The human-in-the-loop design also makes it appropriate for sensitive financial environments where AI should assist decisions, not replace accountability.
+
+### Quality of the Idea
+FaultAuditAI combines agentic AI with a practical corporate-finance audit workflow. The unique part is not only detecting suspicious payments — it turns financial audit into a controlled AI mission: the agent plans the work, investigates data, gathers evidence, explains risks, and asks for human approval before any consequential write or final report. MongoDB MCP and Atlas Vector Search make the database an **active investigation layer** instead of passive storage, creating a more useful agent workflow for real finance operations.
 
 ---
 
